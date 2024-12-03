@@ -1,10 +1,15 @@
 import eth_crypto/secp256k1
 import gleam/bit_array
 import gleam/bool
+import gleam/dict.{type Dict}
+import gleam/http
+import gleam/http/request
+import gleam/httpc
 import gleam/int
-import gleam/iterator
 import gleam/result
 import gleam/string
+import gleam/uri.{type Uri}
+import gleam/yielder
 import snag.{type Result}
 
 import eth_crypto/keccak
@@ -23,6 +28,138 @@ pub opaque type Signature {
 
 pub opaque type Hash {
   Hash(hash: BitArray)
+}
+
+pub opaque type SmartContract {
+  SmartContract(addr: Address, selectors: Dict(String, Selector))
+}
+
+pub type SelectorType {
+  Function
+  Event
+}
+
+pub opaque type Selector {
+  Selector(signature: String, hash: String, selector_type: SelectorType)
+}
+
+pub fn new_smart_contract(at: Address) -> SmartContract {
+  SmartContract(at, dict.new())
+}
+
+pub fn get_function(contract: SmartContract, name: String) -> Result(Selector) {
+  case dict.get(contract.selectors, name) {
+    Error(_) -> snag.error("selector name does not exist")
+    Ok(selector) ->
+      case selector.selector_type {
+        Function -> Ok(selector)
+        Event -> snag.error("found selector is an event, not a function")
+      }
+  }
+  |> snag.context("failed to get function " <> name)
+}
+
+pub fn get_event(contract: SmartContract, name: String) -> Result(Selector) {
+  case dict.get(contract.selectors, name) {
+    Error(_) -> snag.error("selector name does not exist")
+    Ok(selector) ->
+      case selector.selector_type {
+        Event -> Ok(selector)
+        Function -> snag.error("found selector is a function, not an event")
+      }
+  }
+  |> snag.context("failed to get function " <> name)
+}
+
+pub fn add_function(
+  contract: SmartContract,
+  function_definition: #(String, String),
+) -> SmartContract {
+  let signature_hash =
+    "0x"
+    <> function_definition.1
+    |> keccak.hash_utf8_string
+    |> bit_array.base16_encode
+    |> string.lowercase
+    |> string.slice(0, 8)
+  SmartContract(
+    ..contract,
+    selectors: dict.insert(
+      contract.selectors,
+      function_definition.0,
+      Selector(function_definition.1, signature_hash, Function),
+    ),
+  )
+}
+
+pub fn add_event(
+  contract: SmartContract,
+  event_definition: #(String, String),
+) -> SmartContract {
+  let signature_hash =
+    "0x"
+    <> event_definition.1
+    |> keccak.hash_utf8_string
+    |> bit_array.base16_encode
+    |> string.lowercase
+    |> string.slice(0, 8)
+
+  SmartContract(
+    ..contract,
+    selectors: dict.insert(
+      contract.selectors,
+      event_definition.0,
+      Selector(event_definition.1, signature_hash, Event),
+    ),
+  )
+}
+
+pub fn eth_call(
+  contract: SmartContract,
+  function_selector: Selector,
+  data: String,
+  rpc_uri: Uri,
+) -> Result(String) {
+  //TODO:
+  // add decoder function as argument
+  // and decode the response
+
+  case function_selector.selector_type {
+    Function -> {
+      let assert Ok(request) = request.from_uri(rpc_uri)
+      let body = "{
+  \"jsonrpc\": \"2.0\",
+  \"id\": 1,
+  \"method\": \"eth_call\",
+  \"params\": [
+    {
+      \"to\": \"" <> address_to_string(contract.addr) <> "\",
+      \"data\": \"" <> function_selector.hash <> data <> "\"
+    },
+    \"latest\"
+  ]
+}"
+      let response =
+        request
+        |> request.prepend_header("Content-Type", "application/json")
+        |> request.prepend_header("Accept", "application/json")
+        |> request.set_method(http.Post)
+        |> request.set_body(body)
+        |> httpc.send
+      case response {
+        Ok(res) -> {
+          use <- bool.guard(
+            res.status >= 300 && res.status < 200,
+            snag.error("status error: " <> int.to_string(res.status)),
+          )
+          Ok(res.body)
+        }
+        Error(_e) -> snag.error("failed to fetch a response from the RPC")
+      }
+    }
+    _ -> snag.error("selector is not a function")
+  }
+  |> snag.context("failed to call function " <> function_selector.signature)
 }
 
 const message_prefix = <<25, "Ethereum Signed Message:\n":utf8>>
@@ -86,7 +223,7 @@ pub fn address_to_checksummed_address(address: Address) -> String {
     bit_array.base16_encode(address)
     |> string.lowercase
     |> keccak.hash_utf8_string
-  use checksummed_address, index <- iterator.fold(iterator.range(0, 19), "0x")
+  use checksummed_address, index <- yielder.fold(yielder.range(0, 19), "0x")
   let assert Ok(address_byte) = bit_array.slice(address, index, 1)
   let assert Ok(checksum_byte) = bit_array.slice(checksum, index, 1)
   let assert <<address_byte_first_half:4, address_byte_second_half:4>> =
