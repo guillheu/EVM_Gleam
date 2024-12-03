@@ -23,7 +23,7 @@ packages = [
   { name = "req", version = "0.5.8", build_tools = ["mix"], requirements = ["brotli", "ezstd", "finch", "jason", "mime", "nimble_csv", "plug"], otp_app = "req", source = "hex", outer_checksum = "D7FC5898A566477E174F26887821A3C5082B243885520EE4B45555F5D53F40EF" },
   { name = "rustler", version = "0.35.0", build_tools = ["mix"], requirements = ["jason", "req", "toml"], otp_app = "rustler", source = "hex", outer_checksum = "A176BEA1BB6711474F9DFAD282066F2B7392E246459BF4E29DFFF6D828779FDF" },
   { name = "rustler_precompiled", version = "0.8.2", build_tools = ["mix"], requirements = ["castore", "rustler"], otp_app = "rustler_precompiled", source = "hex", outer_checksum = "63D1BD5F8E23096D1FF851839923162096364BAC8656A4A3C00D1FFF8E83EE0A" },
-  { name = "snag", version = "0.3.0", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "snag", source = "hex", outer_checksum = "54D32E16E33655346AA3E66CBA7E191DE0A8793D2C05284E3EFB90AD2CE92BCC" },
+  { name = "snag", version = "1.0.0", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "snag", source = "hex", outer_checksum = "08E9EB87C413457DB1DD66CD704C6878DACC9C93B418600F63873D0CD224E756" },
   { name = "telemetry", version = "1.3.0", build_tools = ["rebar3"], requirements = [], otp_app = "telemetry", source = "hex", outer_checksum = "7015FC8919DBE63764F4B4B87A95B7C0996BD539E0D499BE6EC9D7F3875B79E6" },
   { name = "toml", version = "0.7.0", build_tools = ["mix"], requirements = [], otp_app = "toml", source = "hex", outer_checksum = "0690246A2478C1DEFD100B0C9B89B4EA280A22BE9A7B313A8A058A2408A2FA70" },
 ]
@@ -33,4 +33,4 @@ ex_keccak = { version = ">= 0.7.5 and < 1.0.0" }
 ex_secp256k1 = { version = ">= 0.7.3 and < 1.0.0" }
 gleam_stdlib = { version = ">= 0.34.0 and < 2.0.0" }
 gleeunit = { version = ">= 1.0.0 and < 2.0.0" }
-snag = { version = ">= 0.3.0 and < 1.0.0" }
+snag = { version = ">= 1.0.0 and < 2.0.0" }
