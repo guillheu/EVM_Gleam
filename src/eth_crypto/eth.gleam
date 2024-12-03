@@ -43,6 +43,10 @@ pub opaque type Selector {
   Selector(signature: String, hash: String, selector_type: SelectorType)
 }
 
+pub fn new_erc20_contract(at: Address) -> SmartContract {
+  SmartContract(at, dict.from_list([]))
+}
+
 pub fn new_smart_contract(at: Address) -> SmartContract {
   SmartContract(at, dict.new())
 }
@@ -73,11 +77,12 @@ pub fn get_event(contract: SmartContract, name: String) -> Result(Selector) {
 
 pub fn add_function(
   contract: SmartContract,
-  function_definition: #(String, String),
+  name: String,
+  signature: String,
 ) -> SmartContract {
   let signature_hash =
     "0x"
-    <> function_definition.1
+    <> signature
     |> keccak.hash_utf8_string
     |> bit_array.base16_encode
     |> string.lowercase
@@ -86,19 +91,20 @@ pub fn add_function(
     ..contract,
     selectors: dict.insert(
       contract.selectors,
-      function_definition.0,
-      Selector(function_definition.1, signature_hash, Function),
+      name,
+      Selector(signature, signature_hash, Function),
     ),
   )
 }
 
 pub fn add_event(
   contract: SmartContract,
-  event_definition: #(String, String),
+  name: String,
+  signature: String,
 ) -> SmartContract {
   let signature_hash =
     "0x"
-    <> event_definition.1
+    <> signature
     |> keccak.hash_utf8_string
     |> bit_array.base16_encode
     |> string.lowercase
@@ -108,8 +114,8 @@ pub fn add_event(
     ..contract,
     selectors: dict.insert(
       contract.selectors,
-      event_definition.0,
-      Selector(event_definition.1, signature_hash, Event),
+      name,
+      Selector(signature, signature_hash, Event),
     ),
   )
 }
