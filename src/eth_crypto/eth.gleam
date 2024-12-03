@@ -34,18 +34,9 @@ pub opaque type SmartContract {
   SmartContract(addr: Address, selectors: Dict(String, Selector))
 }
 
-// pub type SelectorType {
-//   Function
-//   Event
-// }
-
 pub opaque type Selector {
   Function(signature: String, hash: String)
   Event(signature: String, hash: String)
-}
-
-pub fn new_erc20_contract(at: Address) -> SmartContract {
-  SmartContract(at, dict.from_list([]))
 }
 
 pub fn new_smart_contract(at: Address) -> SmartContract {
