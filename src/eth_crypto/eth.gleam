@@ -30,8 +30,8 @@ pub opaque type Hash {
   Hash(hash: BitArray)
 }
 
-pub opaque type SmartContract {
-  SmartContract(addr: Address, selectors: Dict(String, Selector))
+pub opaque type SmartContract(id) {
+  SmartContract(addr: Address, selectors: Dict(id, Selector))
 }
 
 pub opaque type Selector {
@@ -39,25 +39,25 @@ pub opaque type Selector {
   Event(signature: String, hash: String)
 }
 
-pub fn new_smart_contract(at: Address) -> SmartContract {
+pub fn new_smart_contract(at: Address) -> SmartContract(id) {
   SmartContract(at, dict.new())
 }
 
-pub fn get_function(contract: SmartContract, name: String) -> Result(Selector) {
-  case dict.get(contract.selectors, name) {
-    Error(_) -> snag.error("selector name does not exist")
+pub fn get_function(contract: SmartContract(id), id: id) -> Result(Selector) {
+  case dict.get(contract.selectors, id) {
+    Error(_) -> snag.error("selector id does not exist")
     Ok(selector) ->
       case selector {
         Function(_, _) -> Ok(selector)
         Event(_, _) -> snag.error("found selector is an event, not a function")
       }
   }
-  |> snag.context("failed to get function " <> name)
+  |> snag.context("failed to get function " <> string.inspect(id))
 }
 
-pub fn get_event(contract: SmartContract, name: String) -> Result(Selector) {
-  case dict.get(contract.selectors, name) {
-    Error(_) -> snag.error("selector name does not exist")
+pub fn get_event(contract: SmartContract(id), id: id) -> Result(Selector) {
+  case dict.get(contract.selectors, id) {
+    Error(_) -> snag.error("selector id does not exist")
     Ok(selector) ->
       case selector {
         Event(_, _) -> Ok(selector)
@@ -65,14 +65,14 @@ pub fn get_event(contract: SmartContract, name: String) -> Result(Selector) {
           snag.error("found selector is a function, not an event")
       }
   }
-  |> snag.context("failed to get function " <> name)
+  |> snag.context("failed to get function " <> string.inspect(id))
 }
 
 pub fn add_function(
-  contract: SmartContract,
-  name: String,
+  contract: SmartContract(id),
+  id: id,
   signature: String,
-) -> SmartContract {
+) -> SmartContract(id) {
   let signature_hash =
     "0x"
     <> signature
@@ -84,17 +84,17 @@ pub fn add_function(
     ..contract,
     selectors: dict.insert(
       contract.selectors,
-      name,
+      id,
       Function(signature, signature_hash),
     ),
   )
 }
 
 pub fn add_event(
-  contract: SmartContract,
-  name: String,
+  contract: SmartContract(id),
+  id: id,
   signature: String,
-) -> SmartContract {
+) -> SmartContract(id) {
   let signature_hash =
     "0x"
     <> signature
@@ -107,14 +107,14 @@ pub fn add_event(
     ..contract,
     selectors: dict.insert(
       contract.selectors,
-      name,
+      id,
       Event(signature, signature_hash),
     ),
   )
 }
 
 pub fn eth_call(
-  contract: SmartContract,
+  contract: SmartContract(id),
   function_selector selector: Selector,
   data data: String,
   rpc_uri rpc_uri: Uri,

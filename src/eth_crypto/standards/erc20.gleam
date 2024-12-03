@@ -12,18 +12,18 @@ const erc20_events = [
   #("approval", "Approval(address,address,uint256)"),
 ]
 
-pub fn new(at: Address) -> SmartContract {
+pub fn new(at: Address) -> SmartContract(String) {
   eth.new_smart_contract(at)
   |> add_functions
   |> add_events
 }
 
-fn add_functions(contract: SmartContract) -> SmartContract {
+fn add_functions(contract: SmartContract(String)) -> SmartContract(String) {
   use contract, #(name, signature) <- list.fold(erc20_functions, contract)
   eth.add_function(contract, name, signature)
 }
 
-fn add_events(contract: SmartContract) -> SmartContract {
+fn add_events(contract: SmartContract(String)) -> SmartContract(String) {
   use contract, #(name, signature) <- list.fold(erc20_events, contract)
   eth.add_event(contract, name, signature)
 }
