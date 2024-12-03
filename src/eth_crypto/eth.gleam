@@ -34,13 +34,14 @@ pub opaque type SmartContract {
   SmartContract(addr: Address, selectors: Dict(String, Selector))
 }
 
-pub type SelectorType {
-  Function
-  Event
-}
+// pub type SelectorType {
+//   Function
+//   Event
+// }
 
 pub opaque type Selector {
-  Selector(signature: String, hash: String, selector_type: SelectorType)
+  Function(signature: String, hash: String)
+  Event(signature: String, hash: String)
 }
 
 pub fn new_erc20_contract(at: Address) -> SmartContract {
@@ -55,9 +56,9 @@ pub fn get_function(contract: SmartContract, name: String) -> Result(Selector) {
   case dict.get(contract.selectors, name) {
     Error(_) -> snag.error("selector name does not exist")
     Ok(selector) ->
-      case selector.selector_type {
-        Function -> Ok(selector)
-        Event -> snag.error("found selector is an event, not a function")
+      case selector {
+        Function(_, _) -> Ok(selector)
+        Event(_, _) -> snag.error("found selector is an event, not a function")
       }
   }
   |> snag.context("failed to get function " <> name)
@@ -67,9 +68,10 @@ pub fn get_event(contract: SmartContract, name: String) -> Result(Selector) {
   case dict.get(contract.selectors, name) {
     Error(_) -> snag.error("selector name does not exist")
     Ok(selector) ->
-      case selector.selector_type {
-        Event -> Ok(selector)
-        Function -> snag.error("found selector is a function, not an event")
+      case selector {
+        Event(_, _) -> Ok(selector)
+        Function(_, _) ->
+          snag.error("found selector is a function, not an event")
       }
   }
   |> snag.context("failed to get function " <> name)
@@ -92,7 +94,7 @@ pub fn add_function(
     selectors: dict.insert(
       contract.selectors,
       name,
-      Selector(signature, signature_hash, Function),
+      Function(signature, signature_hash),
     ),
   )
 }
@@ -115,23 +117,23 @@ pub fn add_event(
     selectors: dict.insert(
       contract.selectors,
       name,
-      Selector(signature, signature_hash, Event),
+      Event(signature, signature_hash),
     ),
   )
 }
 
 pub fn eth_call(
   contract: SmartContract,
-  function_selector: Selector,
-  data: String,
-  rpc_uri: Uri,
+  function_selector selector: Selector,
+  data data: String,
+  rpc_uri rpc_uri: Uri,
 ) -> Result(String) {
   //TODO:
   // add decoder function as argument
   // and decode the response
 
-  case function_selector.selector_type {
-    Function -> {
+  case selector {
+    Function(_, hash) -> {
       let assert Ok(request) = request.from_uri(rpc_uri)
       let body = "{
   \"jsonrpc\": \"2.0\",
@@ -140,7 +142,7 @@ pub fn eth_call(
   \"params\": [
     {
       \"to\": \"" <> address_to_string(contract.addr) <> "\",
-      \"data\": \"" <> function_selector.hash <> data <> "\"
+      \"data\": \"" <> hash <> data <> "\"
     },
     \"latest\"
   ]
@@ -165,7 +167,7 @@ pub fn eth_call(
     }
     _ -> snag.error("selector is not a function")
   }
-  |> snag.context("failed to call function " <> function_selector.signature)
+  |> snag.context("failed to use selector " <> selector.signature)
 }
 
 const message_prefix = <<25, "Ethereum Signed Message:\n":utf8>>
