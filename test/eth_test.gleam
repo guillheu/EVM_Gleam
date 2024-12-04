@@ -1,6 +1,7 @@
 import gleam/bit_array
 import gleam/list
 import gleam/string
+import gleam/uri
 import gleeunit/should
 
 import eth_crypto/eth
@@ -131,4 +132,16 @@ pub fn signature_test() {
   |> eth.pubkey_to_address
   |> eth.address_to_checksummed_address
   |> should.equal("0x70997970C51812dc3A010C7d01b50e0d17dc79C8")
+}
+
+pub fn eth_get_balance_test() {
+  let assert Ok(address) =
+    eth.address_from_string("0x0000000000000000000000000000000000000000")
+  let assert Ok(rpc_url) = uri.parse("https://rpc.ankr.com/eth")
+  let balance =
+    eth.eth_get_balance(rpc_url, address)
+    |> should.be_ok
+
+  // Current approximate balance of address 0
+  should.be_true(balance > { 13_431_000_000_000_000_000_000 })
 }

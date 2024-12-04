@@ -113,6 +113,52 @@ pub fn add_event(
   )
 }
 
+pub fn eth_get_balance(
+  rpc_uri rpc_uri: Uri,
+  address address: Address,
+) -> Result(Int) {
+  let assert Ok(request) = request.from_uri(rpc_uri)
+  let body = "{
+  \"jsonrpc\": \"2.0\",
+  \"id\": 1,
+  \"method\": \"eth_getBalance\",
+  \"params\": [
+    \"" <> address_to_string(address) <> "\",
+    \"latest\"
+  ]
+}"
+  let response =
+    request
+    |> request.prepend_header("Content-Type", "application/json")
+    |> request.prepend_header("Accept", "application/json")
+    |> request.set_method(http.Post)
+    |> request.set_body(body)
+    |> httpc.send
+  case response {
+    Ok(res) -> {
+      use <- bool.guard(
+        res.status >= 300 && res.status < 200,
+        snag.error("status error: " <> int.to_string(res.status)),
+      )
+      use #(_, hex_balance) <- result.try(
+        string.split_once(res.body, "0x")
+        |> result.try_recover(fn(_) {
+          snag.error("failed to extract balance result from rpc response")
+        }),
+      )
+      let hex_balance = string.drop_end(hex_balance, 2)
+      use balance <- result.try(
+        int.base_parse(hex_balance, 16)
+        |> result.try_recover(fn(_) {
+          snag.error("result balance is not valid hexadecimal")
+        }),
+      )
+      Ok(balance)
+    }
+    Error(_e) -> snag.error("failed to fetch a response from the RPC")
+  }
+}
+
 pub fn eth_call(
   contract: SmartContract,
   function_selector selector: Selector,
