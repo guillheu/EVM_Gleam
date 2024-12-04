@@ -116,13 +116,20 @@ pub fn add_event(
 pub fn eth_call(
   contract: SmartContract,
   function_selector selector: Selector,
-  data data: String,
+  data data: BitArray,
   rpc_uri rpc_uri: Uri,
 ) -> Result(String) {
   //TODO:
   // add decoder function as argument
   // and decode the response
-
+  let data =
+    case bit_array.byte_size(data) % 32 {
+      0 -> data
+      any -> {
+        <<0:size({ 32 - any }), data:bits>>
+      }
+    }
+    |> bit_array.base16_encode
   case selector {
     Function(_, hash) -> {
       let assert Ok(request) = request.from_uri(rpc_uri)
