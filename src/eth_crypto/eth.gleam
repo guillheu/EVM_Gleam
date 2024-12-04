@@ -30,8 +30,8 @@ pub opaque type Hash {
   Hash(hash: BitArray)
 }
 
-pub opaque type SmartContract(id) {
-  SmartContract(addr: Address, selectors: Dict(id, Selector))
+pub opaque type SmartContract {
+  SmartContract(addr: Address, selectors: Dict(String, Selector))
 }
 
 pub opaque type Selector {
@@ -39,11 +39,11 @@ pub opaque type Selector {
   Event(signature: String, hash: String)
 }
 
-pub fn new_smart_contract(at: Address) -> SmartContract(id) {
+pub fn new_smart_contract(at: Address) -> SmartContract {
   SmartContract(at, dict.new())
 }
 
-pub fn get_function(contract: SmartContract(id), id: id) -> Result(Selector) {
+pub fn get_function(contract: SmartContract, id: String) -> Result(Selector) {
   case dict.get(contract.selectors, id) {
     Error(_) -> snag.error("selector id does not exist")
     Ok(selector) ->
@@ -55,7 +55,7 @@ pub fn get_function(contract: SmartContract(id), id: id) -> Result(Selector) {
   |> snag.context("failed to get function " <> string.inspect(id))
 }
 
-pub fn get_event(contract: SmartContract(id), id: id) -> Result(Selector) {
+pub fn get_event(contract: SmartContract, id: String) -> Result(Selector) {
   case dict.get(contract.selectors, id) {
     Error(_) -> snag.error("selector id does not exist")
     Ok(selector) ->
@@ -69,10 +69,10 @@ pub fn get_event(contract: SmartContract(id), id: id) -> Result(Selector) {
 }
 
 pub fn add_function(
-  contract: SmartContract(id),
-  id: id,
+  contract: SmartContract,
+  id: String,
   signature: String,
-) -> SmartContract(id) {
+) -> SmartContract {
   let signature_hash =
     "0x"
     <> signature
@@ -91,10 +91,10 @@ pub fn add_function(
 }
 
 pub fn add_event(
-  contract: SmartContract(id),
-  id: id,
+  contract: SmartContract,
+  id: String,
   signature: String,
-) -> SmartContract(id) {
+) -> SmartContract {
   let signature_hash =
     "0x"
     <> signature
@@ -114,7 +114,7 @@ pub fn add_event(
 }
 
 pub fn eth_call(
-  contract: SmartContract(id),
+  contract: SmartContract,
   function_selector selector: Selector,
   data data: String,
   rpc_uri rpc_uri: Uri,
