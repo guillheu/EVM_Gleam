@@ -126,7 +126,8 @@ pub fn eth_call(
     case bit_array.byte_size(data) % 32 {
       0 -> data
       any -> {
-        <<0:size({ 32 - any }), data:bits>>
+        let padding = { 32 - any } * 8
+        <<0:size(padding), data:bits>>
       }
     }
     |> bit_array.base16_encode
