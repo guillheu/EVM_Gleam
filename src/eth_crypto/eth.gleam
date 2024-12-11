@@ -2,10 +2,14 @@ import eth_crypto/secp256k1
 import gleam/bit_array
 import gleam/bool
 import gleam/dict.{type Dict}
+import gleam/dynamic.{type Dynamic}
+import gleam/function
 import gleam/http
 import gleam/http/request
 import gleam/httpc
 import gleam/int
+import gleam/io
+import gleam/json
 import gleam/result
 import gleam/string
 import gleam/uri.{type Uri}
@@ -37,6 +41,11 @@ pub opaque type SmartContract {
 pub opaque type Selector {
   Function(signature: String, hash: String)
   Event(signature: String, hash: String)
+}
+
+pub type RpcResponse {
+  RpcResult(content: String)
+  RpcError(code: Int, message: String)
 }
 
 pub fn new_smart_contract(at: Address) -> SmartContract {
@@ -164,7 +173,7 @@ pub fn eth_call(
   function_selector selector: Selector,
   data data: BitArray,
   rpc_uri rpc_uri: Uri,
-) -> Result(String) {
+) -> Result(RpcResponse) {
   //TODO:
   // add decoder function as argument
   // and decode the response
@@ -205,7 +214,7 @@ pub fn eth_call(
             res.status >= 300 && res.status < 200,
             snag.error("status error: " <> int.to_string(res.status)),
           )
-          Ok(res.body)
+          parse_eth_call_response(res.body)
         }
         Error(_e) -> snag.error("failed to fetch a response from the RPC")
       }
@@ -213,6 +222,51 @@ pub fn eth_call(
     _ -> snag.error("selector is not a function")
   }
   |> snag.context("failed to use selector " <> selector.signature)
+}
+
+pub fn parse_eth_call_response(response: String) -> Result(RpcResponse) {
+  let rpc_result_decoder =
+    dynamic.decode1(RpcResult, dynamic.field("result", dynamic.string))
+  use _res_err <- result.try_recover(json.decode(response, rpc_result_decoder))
+
+  let rpc_error_dict_decoder =
+    dynamic.decode1(
+      function.identity,
+      dynamic.field("error", dynamic.dict(dynamic.string, dynamic.dynamic)),
+    )
+  use response_error_dict <- result.try(
+    json.decode(response, rpc_error_dict_decoder)
+    |> result.try_recover(fn(_err_err) {
+      snag.error(
+        "failed to extract either a result or error field from the rpc response",
+      )
+    }),
+  )
+  use error_code_dynamic <- result.try(
+    dict.get(response_error_dict, "code")
+    |> result.try_recover(fn(_) {
+      snag.error("rpc response error field did not contain a code field")
+    }),
+  )
+  use error_code <- result.try(
+    dynamic.int(error_code_dynamic)
+    |> result.try_recover(fn(_) {
+      snag.error("rpc response error code field is not an int")
+    }),
+  )
+  use error_message_dynamic <- result.try(
+    dict.get(response_error_dict, "message")
+    |> result.try_recover(fn(_) {
+      snag.error("rpc response error field did not contain a message field")
+    }),
+  )
+  use error_message <- result.try(
+    dynamic.string(error_message_dynamic)
+    |> result.try_recover(fn(_) {
+      snag.error("rpc response error code field is not an int")
+    }),
+  )
+  Ok(RpcError(error_code, error_message))
 }
 
 const message_prefix = <<25, "Ethereum Signed Message:\n":utf8>>

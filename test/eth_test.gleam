@@ -1,4 +1,6 @@
 import gleam/bit_array
+import gleam/dynamic
+import gleam/io
 import gleam/list
 import gleam/string
 import gleam/uri
@@ -144,4 +146,22 @@ pub fn eth_get_balance_test() {
 
   // Current approximate balance of address 0
   should.be_true(balance > { 13_431_000_000_000_000_000_000 })
+}
+
+pub fn parse_eth_call_response_test() {
+  let test_response =
+    "{\"id\":1,\"jsonrpc\":\"2.0\",\"result\":\"0x0000000000000000000000000000000000000000000000000000000000000000\"}"
+  eth.parse_eth_call_response(test_response)
+  |> should.be_ok
+  |> should.equal(eth.RpcResult(
+    "0x0000000000000000000000000000000000000000000000000000000000000000",
+  ))
+  let test_response =
+    "{\"id\":1,\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32602,\"message\":\"invalid argument 0: json: cannot unmarshal invalid hex string into Go struct field TransactionArgs.data of type hexutil.Bytes\"}}"
+  eth.parse_eth_call_response(test_response)
+  |> should.be_ok
+  |> should.equal(eth.RpcError(
+    -32_602,
+    "invalid argument 0: json: cannot unmarshal invalid hex string into Go struct field TransactionArgs.data of type hexutil.Bytes",
+  ))
 }
