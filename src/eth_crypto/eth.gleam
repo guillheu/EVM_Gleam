@@ -384,3 +384,7 @@ pub fn pubkey_to_address(pubkey: PubKey) -> Address {
   let assert Ok(address_bits) = bit_array.slice(keccak.hash(no_prefix), 12, 20)
   Address(address_bits)
 }
+
+pub fn get_contract_address(smart_contract contract: SmartContract) -> Address {
+  contract.addr
+}
