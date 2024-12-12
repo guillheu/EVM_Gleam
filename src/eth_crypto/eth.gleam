@@ -150,7 +150,7 @@ pub fn eth_get_balance(
         snag.error("status error: " <> int.to_string(res.status)),
       )
       use #(_, hex_balance) <- result.try(
-        string.split_once(res.body, "0x")
+        string.split_once(res.body |> string.trim_end, "0x")
         |> result.try_recover(fn(_) {
           snag.error("failed to extract balance result from rpc response")
         }),
