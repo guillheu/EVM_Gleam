@@ -151,16 +151,16 @@ pub fn eth_get_balance(
       )
       use #(_, hex_balance) <- result.try(
         string.split_once(res.body |> string.trim_end, "0x")
-        |> result.try_recover(fn(_) {
-          snag.error("failed to extract balance result from rpc response")
-        }),
+        |> result.replace_error(snag.new(
+          "failed to extract balance result from rpc response",
+        )),
       )
       let hex_balance = string.drop_end(hex_balance, 2)
       use balance <- result.try(
         int.base_parse(hex_balance, 16)
-        |> result.try_recover(fn(_) {
-          snag.error("result balance is not valid hexadecimal")
-        }),
+        |> result.replace_error(snag.new(
+          "result balance is not valid hexadecimal",
+        )),
       )
       Ok(balance)
     }
@@ -236,35 +236,33 @@ pub fn parse_eth_call_response(response: String) -> Result(RpcResponse) {
     )
   use response_error_dict <- result.try(
     json.decode(response, rpc_error_dict_decoder)
-    |> result.try_recover(fn(_err_err) {
-      snag.error(
-        "failed to extract either a result or error field from the rpc response",
-      )
-    }),
+    |> result.replace_error(snag.new(
+      "failed to extract either a result or error field from the rpc response",
+    )),
   )
   use error_code_dynamic <- result.try(
     dict.get(response_error_dict, "code")
-    |> result.try_recover(fn(_) {
-      snag.error("rpc response error field did not contain a code field")
-    }),
+    |> result.replace_error(snag.new(
+      "rpc response error field did not contain a code field",
+    )),
   )
   use error_code <- result.try(
     dynamic.int(error_code_dynamic)
-    |> result.try_recover(fn(_) {
-      snag.error("rpc response error code field is not an int")
-    }),
+    |> result.replace_error(snag.new(
+      "rpc response error code field is not an int",
+    )),
   )
   use error_message_dynamic <- result.try(
     dict.get(response_error_dict, "message")
-    |> result.try_recover(fn(_) {
-      snag.error("rpc response error field did not contain a message field")
-    }),
+    |> result.replace_error(snag.new(
+      "rpc response error field did not contain a message field",
+    )),
   )
   use error_message <- result.try(
     dynamic.string(error_message_dynamic)
-    |> result.try_recover(fn(_) {
-      snag.error("rpc response error code field is not an int")
-    }),
+    |> result.replace_error(snag.new(
+      "rpc response error code field is not an int",
+    )),
   )
   Ok(RpcError(error_code, error_message))
 }
@@ -369,7 +367,7 @@ pub fn address_from_string(from: String) -> Result(Address) {
   }
   use decoded_address <- result.try(
     bit_array.base16_decode(no_leading_0x)
-    |> result.try_recover(fn(_) { snag.error("not a valid hex string") }),
+    |> result.replace_error(snag.new("not a valid hex string")),
   )
   use <- bool.guard(
     bit_array.byte_size(decoded_address) != 20,
