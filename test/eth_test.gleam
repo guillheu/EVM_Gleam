@@ -2,6 +2,7 @@ import gleam/bit_array
 import gleam/dynamic
 import gleam/io
 import gleam/list
+import gleam/option.{Some}
 import gleam/string
 import gleam/uri
 import gleeunit/should
@@ -146,6 +147,16 @@ pub fn eth_get_balance_test() {
 
   // Current approximate balance of address 0
   should.be_true(balance > { 13_431_000_000_000_000_000_000 })
+}
+
+pub fn eth_get_block_miner_test() {
+  let assert Ok(rpc_url) = uri.parse("https://rpc.ankr.com/eth")
+  let block = Some(21_879_726)
+  let assert Ok(miner) =
+    eth.address_from_string("0x4838B106FCe9647Bdf1E7877BF73cE8B0BAD5f97")
+  eth.eth_get_block_miner(rpc_url, block)
+  |> should.be_ok
+  |> should.equal(miner)
 }
 
 pub fn parse_eth_call_response_test() {

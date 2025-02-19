@@ -10,6 +10,7 @@ import gleam/httpc
 import gleam/int
 import gleam/io
 import gleam/json
+import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
 import gleam/uri.{type Uri}
@@ -120,6 +121,56 @@ pub fn add_event(
       Event(signature, signature_hash),
     ),
   )
+}
+
+pub fn eth_get_block_miner(
+  rpc_uri rpc_uri: Uri,
+  block_number block_number: Option(Int),
+) -> Result(Address) {
+  let assert Ok(request) = request.from_uri(rpc_uri)
+  let block_number = case block_number {
+    Some(value) -> "0x" <> int.to_base16(value)
+    None -> "latest"
+  }
+  let body = "{
+  \"jsonrpc\": \"2.0\",
+  \"id\": 1,
+  \"method\": \"eth_getBlockByNumber\",
+  \"params\": [
+    \"" <> block_number <> "\",
+    false
+  ]
+}"
+  let response =
+    request
+    |> request.prepend_header("Content-Type", "application/json")
+    |> request.prepend_header("Accept", "application/json")
+    |> request.set_method(http.Post)
+    |> request.set_body(body)
+    |> httpc.send
+  case response {
+    Ok(res) -> {
+      use <- bool.guard(
+        res.status >= 300 && res.status < 200,
+        snag.error("status error: " <> int.to_string(res.status)),
+      )
+
+      use #(_, miner_address_and_rest) <- result.try(
+        string.split_once(res.body |> string.trim_end, "\"miner\":\"")
+        |> result.replace_error(snag.new(
+          "failed to extract miner field from rpc response",
+        )),
+      )
+      use #(miner_address, _) <- result.try(
+        string.split_once(miner_address_and_rest, "\",\"")
+        |> result.replace_error(snag.new(
+          "failed to extract miner field from rpc response",
+        )),
+      )
+      address_from_string(miner_address)
+    }
+    Error(_e) -> snag.error("failed to fetch a response from the RPC")
+  }
 }
 
 pub fn eth_get_balance(
