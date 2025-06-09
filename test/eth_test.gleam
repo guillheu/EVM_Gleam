@@ -5,7 +5,6 @@ import gleam/list
 import gleam/option.{Some}
 import gleam/string
 import gleam/uri
-import gleeunit/should
 
 import eth_crypto/eth
 
@@ -70,58 +69,44 @@ pub fn eth_address_test() {
   let assert Ok(pubkey) = eth.new_pubkey(pubkey_bits)
   let address = eth.pubkey_to_address(pubkey)
 
-  eth.address_to_string(address) |> should.equal(test_non_checksummed_address)
-  eth.address_to_checksummed_address(address)
-  |> should.equal(test_checksummed_address)
+  assert eth.address_to_string(address) == test_non_checksummed_address
+  assert eth.address_to_checksummed_address(address) == test_checksummed_address
 
   // Successful tests
-  "0x0000000000000000000000000000000000000000"
-  |> eth.address_from_string
-  |> should.be_ok
-  |> eth.address_to_string
-  |> should.equal("0x0000000000000000000000000000000000000000")
-  "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
-  |> eth.address_from_string
-  |> should.be_ok
-  |> eth.address_to_string
-  |> should.equal(
-    "0x" <> string.uppercase("70997970C51812dc3A010C7d01b50e0d17dc79C8"),
-  )
-  "0000000000000000000000000000000000000000"
-  |> eth.address_from_string
-  |> should.be_ok
-  |> eth.address_to_string
-  |> should.equal("0x0000000000000000000000000000000000000000")
-  "70997970C51812dc3A010C7d01b50e0d17dc79C8"
-  |> eth.address_from_string
-  |> should.be_ok
-  |> eth.address_to_string
-  |> should.equal(
-    "0x" <> string.uppercase("70997970C51812dc3A010C7d01b50e0d17dc79C8"),
-  )
+  let assert Ok(value) =
+    eth.address_from_string("0x0000000000000000000000000000000000000000")
+  assert value
+    |> eth.address_to_string
+    == "0x0000000000000000000000000000000000000000"
+  let assert Ok(value) =
+    eth.address_from_string("0x70997970C51812dc3A010C7d01b50e0d17dc79C8")
+  assert value
+    |> eth.address_to_string
+    == "0x" <> string.uppercase("70997970C51812dc3A010C7d01b50e0d17dc79C8")
+  let assert Ok(value) =
+    eth.address_from_string("0000000000000000000000000000000000000000")
+  assert value
+    |> eth.address_to_string
+    == "0x0000000000000000000000000000000000000000"
+  let assert Ok(value) =
+    eth.address_from_string("70997970C51812dc3A010C7d01b50e0d17dc79C8")
+  assert value
+    |> eth.address_to_string
+    == "0x" <> string.uppercase("70997970C51812dc3A010C7d01b50e0d17dc79C8")
 
   // Failing tests
-  "0x70997970C51812dc3A010C7d01b50e0d17dc79"
-  |> eth.address_from_string
-  |> should.be_error
-  "0x70997970C51812dc3A010C7d01b50e0d17dc79C"
-  |> eth.address_from_string
-  |> should.be_error
-  "70997970C51812dc3A010C7d01b50e0d17dc79"
-  |> eth.address_from_string
-  |> should.be_error
-  "70997970C51812dc3A010C7d01b50e0d17dc79C"
-  |> eth.address_from_string
-  |> should.be_error
-  "G0997970C51812dc3A010C7d01b50e0d17dc79C8"
-  |> eth.address_from_string
-  |> should.be_error
-  "Should fail, obviously"
-  |> eth.address_from_string
-  |> should.be_error
-  ""
-  |> eth.address_from_string
-  |> should.be_error
+  let assert Error(_) =
+    eth.address_from_string("0x70997970C51812dc3A010C7d01b50e0d17dc79")
+  let assert Error(_) =
+    eth.address_from_string("0x70997970C51812dc3A010C7d01b50e0d17dc79C")
+  let assert Error(_) =
+    eth.address_from_string("70997970C51812dc3A010C7d01b50e0d17dc79")
+  let assert Error(_) =
+    eth.address_from_string("70997970C51812dc3A010C7d01b50e0d17dc79C")
+  let assert Error(_) =
+    eth.address_from_string("G0997970C51812dc3A010C7d01b50e0d17dc79C8")
+  let assert Error(_) = eth.address_from_string("Should fail, obviously")
+  let assert Error(_) = eth.address_from_string("")
 }
 
 pub fn signature_test() {
@@ -131,48 +116,52 @@ pub fn signature_test() {
     )
   let assert Ok(signature) = eth.signature_from(signature_full)
   let message_hash = eth.hash_string("A string")
-  eth.recover_pubkey(signature, message_hash)
-  |> eth.pubkey_to_address
-  |> eth.address_to_checksummed_address
-  |> should.equal("0x70997970C51812dc3A010C7d01b50e0d17dc79C8")
+  assert eth.recover_pubkey(signature, message_hash)
+    |> eth.pubkey_to_address
+    |> eth.address_to_checksummed_address
+    == "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
 }
 
 pub fn eth_get_balance_test() {
   let assert Ok(address) =
     eth.address_from_string("0x0000000000000000000000000000000000000000")
-  let assert Ok(rpc_url) = uri.parse("https://rpc.ankr.com/eth")
-  let balance =
-    eth.eth_get_balance(rpc_url, address)
-    |> should.be_ok
+  let assert Ok(rpc_url) = uri.parse("https://eth.llamarpc.com")
+  let assert Ok(value) = eth.eth_get_balance(rpc_url, address)
+  let balance = value
 
   // Current approximate balance of address 0
-  should.be_true(balance > { 13_431_000_000_000_000_000_000 })
+  assert balance > { 13_431_000_000_000_000_000_000 }
 }
 
 pub fn eth_get_block_miner_test() {
-  let assert Ok(rpc_url) = uri.parse("https://rpc.ankr.com/eth")
+  let assert Ok(rpc_url) = uri.parse("https://eth.llamarpc.com")
   let block = Some(21_879_726)
   let assert Ok(miner) =
     eth.address_from_string("0x4838B106FCe9647Bdf1E7877BF73cE8B0BAD5f97")
-  eth.eth_get_block_miner(rpc_url, block)
-  |> should.be_ok
-  |> should.equal(miner)
+  let assert Ok(value) = eth.eth_get_block_miner(rpc_url, block)
+  assert value == miner
 }
 
 pub fn parse_eth_call_response_test() {
   let test_response =
     "{\"id\":1,\"jsonrpc\":\"2.0\",\"result\":\"0x0000000000000000000000000000000000000000000000000000000000000000\"}"
-  eth.parse_eth_call_response(test_response)
-  |> should.be_ok
-  |> should.equal(eth.RpcResult(
-    "0x0000000000000000000000000000000000000000000000000000000000000000",
-  ))
+  let assert Ok(value) = eth.parse_eth_call_response(test_response)
+  assert value
+    == eth.RpcResult(
+      jsonrpc: 2.0,
+      id: 1,
+      result: "0x0000000000000000000000000000000000000000000000000000000000000000",
+    )
   let test_response =
     "{\"id\":1,\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32602,\"message\":\"invalid argument 0: json: cannot unmarshal invalid hex string into Go struct field TransactionArgs.data of type hexutil.Bytes\"}}"
-  eth.parse_eth_call_response(test_response)
-  |> should.be_ok
-  |> should.equal(eth.RpcError(
-    -32_602,
-    "invalid argument 0: json: cannot unmarshal invalid hex string into Go struct field TransactionArgs.data of type hexutil.Bytes",
-  ))
+  let assert Ok(value) = eth.parse_eth_call_response(test_response)
+  assert value
+    == eth.RpcError(
+      jsonrpc: 2.0,
+      id: 1,
+      error: eth.RpcErrorContent(
+        code: -32_602,
+        message: "invalid argument 0: json: cannot unmarshal invalid hex string into Go struct field TransactionArgs.data of type hexutil.Bytes",
+      ),
+    )
 }

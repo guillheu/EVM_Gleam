@@ -2,7 +2,6 @@ import gleam/bit_array
 import gleam/int
 import gleam/string
 
-import gleeunit/should
 
 import eth_crypto/keccak
 import eth_crypto/secp256k1
@@ -10,14 +9,11 @@ import eth_crypto/secp256k1
 pub fn keccak_test() {
   let expected_result =
     "AE55CF31FE3EDBB5B8159DA3348B4C0565068AD0A4A81FEA6AF7DDD22950E98B"
-  bit_array.from_string("A string")
+  assert bit_array.from_string("A string")
   |> keccak.hash
-  |> bit_array.base16_encode
-  |> should.equal(expected_result)
+  |> bit_array.base16_encode == expected_result
 
-  keccak.hash_utf8_string("A string")
-  |> bit_array.base16_encode
-  |> should.equal(expected_result)
+  assert bit_array.base16_encode(keccak.hash_utf8_string("A string")) == expected_result
 }
 
 pub fn secp256k1_test() {
@@ -40,18 +36,18 @@ pub fn secp256k1_test() {
     bit_array.base16_encode(recovery_id_byte) |> int.base_parse(16)
   let recovery_id = recovery_id - 27
 
+  let assert Ok(value) = secp256k1.recover(message_hash, signature, recovery_id)
   let pubkey =
-    secp256k1.recover(message_hash, signature, recovery_id)
-    |> should.be_ok
-  pubkey
-  |> bit_array.base16_encode
-  pubkey
-  |> bit_array.slice(1, 64)
-  |> should.be_ok
+    value
+
+  let assert Ok(sliced_pubkey) =
+    pubkey
+    |> bit_array.slice(1, 64)
+
+  assert sliced_pubkey
   |> keccak.hash
   |> bit_array.base16_encode
-  |> string.slice(24, 40)
-  |> should.equal(string.uppercase("70997970C51812dc3A010C7d01b50e0d17dc79C8"))
+  |> string.slice(24, 40) == string.uppercase("70997970C51812dc3A010C7d01b50e0d17dc79C8")
   // |> bit_array.base16_encode
   // |> keccak.hash_string
   // |> string.slice()

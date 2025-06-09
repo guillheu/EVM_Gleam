@@ -3,6 +3,8 @@ import gleam/bit_array
 import gleam/bool
 import gleam/dict.{type Dict}
 import gleam/dynamic.{type Dynamic}
+import gleam/dynamic/decode
+import gleam/float
 import gleam/function
 import gleam/http
 import gleam/http/request
@@ -10,6 +12,7 @@ import gleam/httpc
 import gleam/int
 import gleam/io
 import gleam/json
+import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
@@ -44,9 +47,42 @@ pub opaque type Selector {
   Event(signature: String, hash: String)
 }
 
-pub type RpcResponse {
-  RpcResult(content: String)
-  RpcError(code: Int, message: String)
+pub type RpcResponse(result_type) {
+  RpcResult(jsonrpc: Float, id: Int, result: result_type)
+  RpcError(jsonrpc: Float, id: Int, error: RpcErrorContent)
+  Undefined
+}
+
+fn rpc_response_decoder(
+  rpc_result_decoder: decode.Decoder(result_type),
+) -> decode.Decoder(RpcResponse(result_type)) {
+  use jsonrpc_string <- decode.field("jsonrpc", decode.string)
+  use id <- decode.field("id", decode.int)
+  // Either we have a "result" field which gets decoded by the rpc_result_decoder
+  // (because RPC results differ based on the RPC function that was called)
+  // OR we have a "error" field which always takes the same decoder.
+  // In both cases, we then transfer (map) the decoded optional field into the appropriate final RpcResponse variant.
+  // If neither "result" nor "error" is found, we get a decode failure with the `Undefined` variant instead.
+  case float.parse(jsonrpc_string) {
+    Error(_) -> decode.failure(Undefined, "jsonrpc")
+    Ok(jsonrpc) ->
+      decode.one_of(decode.failure(Undefined, "rpc_response"), [
+        decode.at(["result"], rpc_result_decoder)
+          |> decode.map(fn(result) { RpcResult(jsonrpc:, id:, result:) }),
+        decode.at(["error"], rpc_error_content_decoder())
+          |> decode.map(fn(error) { RpcError(jsonrpc:, id:, error:) }),
+      ])
+  }
+}
+
+pub type RpcErrorContent {
+  RpcErrorContent(code: Int, message: String)
+}
+
+fn rpc_error_content_decoder() -> decode.Decoder(RpcErrorContent) {
+  use code <- decode.field("code", decode.int)
+  use message <- decode.field("message", decode.string)
+  decode.success(RpcErrorContent(code:, message:))
 }
 
 pub fn new_smart_contract(at: Address) -> SmartContract {
@@ -215,7 +251,14 @@ pub fn eth_get_balance(
       )
       Ok(balance)
     }
-    Error(_e) -> snag.error("failed to fetch a response from the RPC")
+    Error(e) ->
+      snag.error(
+        "failed to fetch a response from the RPC: "
+        <> case e {
+          httpc.FailedToConnect(_ip4, _ip6) -> "failed to connect"
+          httpc.InvalidUtf8Response -> "invalid UTF8 response"
+        },
+      )
   }
 }
 
@@ -224,7 +267,7 @@ pub fn eth_call(
   function_selector selector: Selector,
   data data: BitArray,
   rpc_uri rpc_uri: Uri,
-) -> Result(RpcResponse) {
+) -> Result(RpcResponse(String)) {
   //TODO:
   // add decoder function as argument
   // and decode the response
@@ -275,47 +318,30 @@ pub fn eth_call(
   |> snag.context("failed to use selector " <> selector.signature)
 }
 
-pub fn parse_eth_call_response(response: String) -> Result(RpcResponse) {
-  let rpc_result_decoder =
-    dynamic.decode1(RpcResult, dynamic.field("result", dynamic.string))
-  use _res_err <- result.try_recover(json.decode(response, rpc_result_decoder))
+pub fn parse_eth_call_response(response: String) -> Result(RpcResponse(String)) {
+  json.parse(response, rpc_response_decoder(decode.string))
+  |> result.map_error(fn(decode_error) {
+    snag.new({
+      "Failed to decode Ethereum RPC response: "
+      <> case decode_error {
+        json.UnableToDecode(decode_errors) ->
+          list.map(decode_errors, decode_error_to_string) |> string.concat
+        json.UnexpectedByte(s) -> "Unexpected byte: " <> s
+        json.UnexpectedEndOfInput -> "Unexpected end of input: "
+        json.UnexpectedSequence(s) -> "Unexpected sequence: " <> s
+      }
+    })
+  })
+}
 
-  let rpc_error_dict_decoder =
-    dynamic.decode1(
-      function.identity,
-      dynamic.field("error", dynamic.dict(dynamic.string, dynamic.dynamic)),
-    )
-  use response_error_dict <- result.try(
-    json.decode(response, rpc_error_dict_decoder)
-    |> result.replace_error(snag.new(
-      "failed to extract either a result or error field from the rpc response",
-    )),
-  )
-  use error_code_dynamic <- result.try(
-    dict.get(response_error_dict, "code")
-    |> result.replace_error(snag.new(
-      "rpc response error field did not contain a code field",
-    )),
-  )
-  use error_code <- result.try(
-    dynamic.int(error_code_dynamic)
-    |> result.replace_error(snag.new(
-      "rpc response error code field is not an int",
-    )),
-  )
-  use error_message_dynamic <- result.try(
-    dict.get(response_error_dict, "message")
-    |> result.replace_error(snag.new(
-      "rpc response error field did not contain a message field",
-    )),
-  )
-  use error_message <- result.try(
-    dynamic.string(error_message_dynamic)
-    |> result.replace_error(snag.new(
-      "rpc response error code field is not an int",
-    )),
-  )
-  Ok(RpcError(error_code, error_message))
+fn decode_error_to_string(decode_error: decode.DecodeError) -> String {
+  "\nExpected: \t"
+  <> decode_error.expected
+  <> "\nFound: \t"
+  <> decode_error.found
+  <> "Path: \t"
+  <> decode_error.path |> list.intersperse(".") |> string.concat
+  <> "\n"
 }
 
 const message_prefix = <<25, "Ethereum Signed Message:\n":utf8>>
