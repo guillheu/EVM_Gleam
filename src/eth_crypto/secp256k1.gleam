@@ -5,8 +5,8 @@ pub fn recover(
   recovery_id: Int,
 ) -> Result(BitArray, Nil)
 
-@external(erlang, "Elixir.ExSecp256k1", "sign")
+@external(erlang, "Elixir.ExSecp256k1", "sign_compact")
 pub fn sign(
   message: BitArray,
   private_key: BitArray,
-) -> Result(#(BitArray, BitArray, Int), Nil)
+) -> Result(#(BitArray, Int), Nil)
