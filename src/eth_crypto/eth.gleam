@@ -257,6 +257,7 @@ pub fn eth_get_balance(
         <> case e {
           httpc.FailedToConnect(_ip4, _ip6) -> "failed to connect"
           httpc.InvalidUtf8Response -> "invalid UTF8 response"
+          httpc.ResponseTimeout -> "response timed out"
         },
       )
   }
