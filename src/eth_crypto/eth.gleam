@@ -2,23 +2,17 @@ import eth_crypto/secp256k1
 import gleam/bit_array
 import gleam/bool
 import gleam/dict.{type Dict}
-import gleam/dynamic.{type Dynamic}
 import gleam/dynamic/decode
-import gleam/float
-import gleam/function
 import gleam/http
 import gleam/http/request
 import gleam/httpc
 import gleam/int
-import gleam/io
 import gleam/json
-import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
 import gleam/uri.{type Uri}
 import gleam/yielder
-import snag.{type Result}
 
 import eth_crypto/keccak
 
@@ -48,31 +42,49 @@ pub opaque type Selector {
 }
 
 pub type RpcResponse(result_type) {
-  RpcResult(jsonrpc: Float, id: Int, result: result_type)
-  RpcError(jsonrpc: Float, id: Int, error: RpcErrorContent)
-  Undefined
+  RpcResult(jsonrpc: String, id: Int, result: result_type)
+  RpcError(jsonrpc: String, id: Int, error: RpcErrorContent)
+  // Undefined
+}
+
+pub type EthError {
+  MissingSelectorId(id: String)
+  SelectorTypeMismatch(
+    expected: fn(String, String) -> Selector,
+    found: fn(String, String) -> Selector,
+  )
+  HttpError(httpc.HttpError)
+  HttpStatusNon200(status: Int)
+  JsonDecodeError(json.DecodeError)
+  RpcResponseError(RpcErrorContent)
+  RpcResponseFieldMissing(missing_field: String)
+  RpcResponseDecodingFailed(details: String)
+  InvalidSignatureByteSize(expected: Int, found: Int)
+  InvalidKeyByteSize(expected: Int, found: Int)
+  InvalidKeyPrefix(expected: String, found: String)
+  InvalidAddressNotHex
+  InvalidAddressLength(expected: Int, found: Int)
 }
 
 fn rpc_response_decoder(
   rpc_result_decoder: decode.Decoder(result_type),
 ) -> decode.Decoder(RpcResponse(result_type)) {
-  use jsonrpc_string <- decode.field("jsonrpc", decode.string)
+  use jsonrpc <- decode.field("jsonrpc", decode.string)
   use id <- decode.field("id", decode.int)
   // Either we have a "result" field which gets decoded by the rpc_result_decoder
   // (because RPC results differ based on the RPC function that was called)
   // OR we have a "error" field which always takes the same decoder.
   // In both cases, we then transfer (map) the decoded optional field into the appropriate final RpcResponse variant.
   // If neither "result" nor "error" is found, we get a decode failure with the `Undefined` variant instead.
-  case float.parse(jsonrpc_string) {
-    Error(_) -> decode.failure(Undefined, "jsonrpc")
-    Ok(jsonrpc) ->
-      decode.one_of(decode.failure(Undefined, "rpc_response"), [
-        decode.at(["result"], rpc_result_decoder)
-          |> decode.map(fn(result) { RpcResult(jsonrpc:, id:, result:) }),
-        decode.at(["error"], rpc_error_content_decoder())
-          |> decode.map(fn(error) { RpcError(jsonrpc:, id:, error:) }),
-      ])
-  }
+
+  decode.one_of(
+    decode.at(["result"], rpc_result_decoder)
+      |> decode.map(fn(result) { RpcResult(jsonrpc:, id:, result:) }),
+    [
+      decode.at(["error"], rpc_error_content_decoder())
+      |> decode.map(fn(error) { RpcError(jsonrpc:, id:, error:) }),
+    ],
+  )
 }
 
 pub type RpcErrorContent {
@@ -89,29 +101,34 @@ pub fn new_smart_contract(at: Address) -> SmartContract {
   SmartContract(at, dict.new())
 }
 
-pub fn get_function(contract: SmartContract, id: String) -> Result(Selector) {
+pub fn get_function(
+  contract: SmartContract,
+  id: String,
+) -> Result(Selector, EthError) {
   case dict.get(contract.selectors, id) {
-    Error(_) -> snag.error("selector id does not exist")
+    Error(_) -> Error(MissingSelectorId(id))
     Ok(selector) ->
       case selector {
         Function(_, _) -> Ok(selector)
-        Event(_, _) -> snag.error("found selector is an event, not a function")
+        Event(_, _) ->
+          Error(SelectorTypeMismatch(expected: Function, found: Event))
       }
   }
-  |> snag.context("failed to get function " <> string.inspect(id))
 }
 
-pub fn get_event(contract: SmartContract, id: String) -> Result(Selector) {
+pub fn get_event(
+  contract: SmartContract,
+  id: String,
+) -> Result(Selector, EthError) {
   case dict.get(contract.selectors, id) {
-    Error(_) -> snag.error("selector id does not exist")
+    Error(_) -> Error(MissingSelectorId(id))
     Ok(selector) ->
       case selector {
         Event(_, _) -> Ok(selector)
         Function(_, _) ->
-          snag.error("found selector is a function, not an event")
+          Error(SelectorTypeMismatch(expected: Event, found: Function))
       }
   }
-  |> snag.context("failed to get function " <> string.inspect(id))
 }
 
 pub fn add_function(
@@ -162,7 +179,7 @@ pub fn add_event(
 pub fn eth_get_block_miner(
   rpc_uri rpc_uri: Uri,
   block_number block_number: Option(Int),
-) -> Result(Address) {
+) -> Result(Address, EthError) {
   let assert Ok(request) = request.from_uri(rpc_uri)
   let block_number = case block_number {
     Some(value) -> "0x" <> int.to_base16(value)
@@ -188,31 +205,27 @@ pub fn eth_get_block_miner(
     Ok(res) -> {
       use <- bool.guard(
         res.status >= 300 && res.status < 200,
-        snag.error("status error: " <> int.to_string(res.status)),
+        Error(HttpStatusNon200(res.status)),
       )
 
-      use #(_, miner_address_and_rest) <- result.try(
-        string.split_once(res.body |> string.trim_end, "\"miner\":\"")
-        |> result.replace_error(snag.new(
-          "failed to extract miner field from rpc response",
-        )),
+      use rpc_response <- result.try(
+        json.parse(res.body, rpc_response_decoder(get_block_result_decoder()))
+        |> result.map_error(JsonDecodeError),
       )
-      use #(miner_address, _) <- result.try(
-        string.split_once(miner_address_and_rest, "\",\"")
-        |> result.replace_error(snag.new(
-          "failed to extract miner field from rpc response",
-        )),
-      )
-      address_from_string(miner_address)
+      case rpc_response {
+        RpcError(_, _, err) -> Error(RpcResponseError(err))
+        RpcResult(_, _, GetBlockResult(miner_address_string)) ->
+          address_from_string(miner_address_string)
+      }
     }
-    Error(_e) -> snag.error("failed to fetch a response from the RPC")
+    Error(e) -> Error(HttpError(e))
   }
 }
 
 pub fn eth_get_balance(
   rpc_uri rpc_uri: Uri,
   address address: Address,
-) -> Result(Int) {
+) -> Result(Int, EthError) {
   let assert Ok(request) = request.from_uri(rpc_uri)
   let body = "{
   \"jsonrpc\": \"2.0\",
@@ -234,32 +247,30 @@ pub fn eth_get_balance(
     Ok(res) -> {
       use <- bool.guard(
         res.status >= 300 && res.status < 200,
-        snag.error("status error: " <> int.to_string(res.status)),
+        Error(HttpStatusNon200(res.status)),
       )
-      use #(_, hex_balance) <- result.try(
-        string.split_once(res.body |> string.trim_end, "0x")
-        |> result.replace_error(snag.new(
-          "failed to extract balance result from rpc response",
-        )),
+
+      use get_balance <- result.try(
+        json.parse(res.body, rpc_response_decoder(decode.string))
+        |> result.map_error(JsonDecodeError),
       )
-      let hex_balance = string.drop_end(hex_balance, 2)
-      use balance <- result.try(
-        int.base_parse(hex_balance, 16)
-        |> result.replace_error(snag.new(
-          "result balance is not valid hexadecimal",
-        )),
-      )
-      Ok(balance)
+      case get_balance {
+        RpcError(_, _, err) -> Error(RpcResponseError(err))
+        RpcResult(_, _, res) ->
+          {
+            use #(_, balance_string) <- result.try(string.split_once(res, "x"))
+            result.map(
+              balance_string
+                |> int.base_parse(16),
+              fn(r) { r },
+            )
+          }
+          |> result.replace_error(RpcResponseDecodingFailed(
+            "balance field is not hexadecimal",
+          ))
+      }
     }
-    Error(e) ->
-      snag.error(
-        "failed to fetch a response from the RPC: "
-        <> case e {
-          httpc.FailedToConnect(_ip4, _ip6) -> "failed to connect"
-          httpc.InvalidUtf8Response -> "invalid UTF8 response"
-          httpc.ResponseTimeout -> "response timed out"
-        },
-      )
+    Error(e) -> Error(HttpError(e))
   }
 }
 
@@ -268,7 +279,7 @@ pub fn eth_call(
   function_selector selector: Selector,
   data data: BitArray,
   rpc_uri rpc_uri: Uri,
-) -> Result(RpcResponse(String)) {
+) -> Result(RpcResponse(String), EthError) {
   //TODO:
   // add decoder function as argument
   // and decode the response
@@ -307,42 +318,17 @@ pub fn eth_call(
         Ok(res) -> {
           use <- bool.guard(
             res.status >= 300 && res.status < 200,
-            snag.error("status error: " <> int.to_string(res.status)),
+            Error(HttpStatusNon200(res.status)),
           )
-          parse_eth_call_response(res.body)
+          res.body
+          |> json.parse(rpc_response_decoder(decode.string))
+          |> result.map_error(JsonDecodeError)
         }
-        Error(_e) -> snag.error("failed to fetch a response from the RPC")
+        Error(e) -> Error(HttpError(e))
       }
     }
-    _ -> snag.error("selector is not a function")
+    _ -> Error(SelectorTypeMismatch(expected: Function, found: Event))
   }
-  |> snag.context("failed to use selector " <> selector.signature)
-}
-
-pub fn parse_eth_call_response(response: String) -> Result(RpcResponse(String)) {
-  json.parse(response, rpc_response_decoder(decode.string))
-  |> result.map_error(fn(decode_error) {
-    snag.new({
-      "Failed to decode Ethereum RPC response: "
-      <> case decode_error {
-        json.UnableToDecode(decode_errors) ->
-          list.map(decode_errors, decode_error_to_string) |> string.concat
-        json.UnexpectedByte(s) -> "Unexpected byte: " <> s
-        json.UnexpectedEndOfInput -> "Unexpected end of input: "
-        json.UnexpectedSequence(s) -> "Unexpected sequence: " <> s
-      }
-    })
-  })
-}
-
-fn decode_error_to_string(decode_error: decode.DecodeError) -> String {
-  "\nExpected: \t"
-  <> decode_error.expected
-  <> "\nFound: \t"
-  <> decode_error.found
-  <> "Path: \t"
-  <> decode_error.path |> list.intersperse(".") |> string.concat
-  <> "\n"
 }
 
 const message_prefix = <<25, "Ethereum Signed Message:\n":utf8>>
@@ -358,10 +344,11 @@ pub fn hash_string(from: String) -> Hash {
   hash(bit_array.from_string(from))
 }
 
-pub fn signature_from(from: BitArray) -> Result(Signature) {
+pub fn signature_from(from: BitArray) -> Result(Signature, EthError) {
+  let signature_byte_size = bit_array.byte_size(from)
   use <- bool.guard(
-    bit_array.byte_size(from) != 65,
-    snag.error("given signature is not 65 bytes long"),
+    signature_byte_size != 65,
+    Error(InvalidSignatureByteSize(expected: 65, found: signature_byte_size)),
   )
   let assert Ok(signature) = bit_array.slice(from, 0, 64)
   let assert <<_:512, recovery_id:8>> = from
@@ -383,15 +370,17 @@ pub fn recover_pubkey(signature: Signature, message_hash: Hash) -> PubKey {
   pubkey
 }
 
-pub fn new_pubkey(key: BitArray) -> Result(PubKey) {
+pub fn new_pubkey(key: BitArray) -> Result(PubKey, EthError) {
+  let key_byte_size = bit_array.byte_size(key)
   use <- bool.guard(
-    bit_array.byte_size(key) != 65,
-    snag.error("given key is not 65 bytes long"),
+    key_byte_size != 65,
+    Error(InvalidKeyByteSize(expected: 65, found: key_byte_size)),
   )
   let assert Ok(key_prefix) = bit_array.slice(key, 0, 1)
+  let key_prefix = key_prefix |> bit_array.base16_encode
   use <- bool.guard(
-    key_prefix |> bit_array.base16_encode != "04",
-    snag.error("key prefix is not the expected 0x04"),
+    key_prefix != "04",
+    Error(InvalidKeyPrefix(expected: "04", found: key_prefix)),
   )
   Ok(PubKey(key))
 }
@@ -438,18 +427,19 @@ pub fn address_to_string(address: Address) -> String {
   "0x" <> bit_array.base16_encode(address.addr)
 }
 
-pub fn address_from_string(from: String) -> Result(Address) {
+pub fn address_from_string(from: String) -> Result(Address, EthError) {
   let no_leading_0x = case from {
     "0x" <> rest -> rest
     _ -> from
   }
   use decoded_address <- result.try(
     bit_array.base16_decode(no_leading_0x)
-    |> result.replace_error(snag.new("not a valid hex string")),
+    |> result.replace_error(InvalidAddressNotHex),
   )
+  let address_byte_size = bit_array.byte_size(decoded_address)
   use <- bool.guard(
-    bit_array.byte_size(decoded_address) != 20,
-    snag.error("address is not 20 bytes long"),
+    address_byte_size != 20,
+    Error(InvalidAddressLength(expected: 20, found: address_byte_size)),
   )
 
   Ok(Address(decoded_address))
@@ -463,4 +453,13 @@ pub fn pubkey_to_address(pubkey: PubKey) -> Address {
 
 pub fn get_contract_address(smart_contract contract: SmartContract) -> Address {
   contract.addr
+}
+
+type GetBlockResult {
+  GetBlockResult(miner: String)
+}
+
+fn get_block_result_decoder() -> decode.Decoder(GetBlockResult) {
+  use miner <- decode.field("miner", decode.string)
+  decode.success(GetBlockResult(miner:))
 }

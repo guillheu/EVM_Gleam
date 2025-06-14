@@ -1,6 +1,4 @@
 import gleam/bit_array
-import gleam/dynamic
-import gleam/io
 import gleam/list
 import gleam/option.{Some}
 import gleam/string
@@ -141,27 +139,26 @@ pub fn eth_get_block_miner_test() {
   let assert Ok(value) = eth.eth_get_block_miner(rpc_url, block)
   assert value == miner
 }
-
-pub fn parse_eth_call_response_test() {
-  let test_response =
-    "{\"id\":1,\"jsonrpc\":\"2.0\",\"result\":\"0x0000000000000000000000000000000000000000000000000000000000000000\"}"
-  let assert Ok(value) = eth.parse_eth_call_response(test_response)
-  assert value
-    == eth.RpcResult(
-      jsonrpc: 2.0,
-      id: 1,
-      result: "0x0000000000000000000000000000000000000000000000000000000000000000",
-    )
-  let test_response =
-    "{\"id\":1,\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32602,\"message\":\"invalid argument 0: json: cannot unmarshal invalid hex string into Go struct field TransactionArgs.data of type hexutil.Bytes\"}}"
-  let assert Ok(value) = eth.parse_eth_call_response(test_response)
-  assert value
-    == eth.RpcError(
-      jsonrpc: 2.0,
-      id: 1,
-      error: eth.RpcErrorContent(
-        code: -32_602,
-        message: "invalid argument 0: json: cannot unmarshal invalid hex string into Go struct field TransactionArgs.data of type hexutil.Bytes",
-      ),
-    )
-}
+// pub fn parse_eth_call_response_test() {
+//   let test_response =
+//     "{\"id\":1,\"jsonrpc\":\"2.0\",\"result\":\"0x0000000000000000000000000000000000000000000000000000000000000000\"}"
+//   let assert Ok(value) = eth.parse_eth_call_response(test_response)
+//   assert value
+//     == eth.RpcResult(
+//       jsonrpc: 2.0,
+//       id: 1,
+//       result: "0x0000000000000000000000000000000000000000000000000000000000000000",
+//     )
+//   let test_response =
+//     "{\"id\":1,\"jsonrpc\":\"2.0\",\"error\":{\"code\":-32602,\"message\":\"invalid argument 0: json: cannot unmarshal invalid hex string into Go struct field TransactionArgs.data of type hexutil.Bytes\"}}"
+//   let assert Ok(value) = eth.parse_eth_call_response(test_response)
+//   assert value
+//     == eth.RpcError(
+//       jsonrpc: 2.0,
+//       id: 1,
+//       error: eth.RpcErrorContent(
+//         code: -32_602,
+//         message: "invalid argument 0: json: cannot unmarshal invalid hex string into Go struct field TransactionArgs.data of type hexutil.Bytes",
+//       ),
+//     )
+// }

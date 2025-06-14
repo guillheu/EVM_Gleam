@@ -19,7 +19,6 @@ packages = [
   { name = "glexer", version = "2.2.1", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "glexer", source = "hex", outer_checksum = "5C235CBDF4DA5203AD5EAB1D6D8B456ED8162C5424FE2309CFFB7EF438B7C269" },
   { name = "rustler_precompiled", version = "0.8.2", build_tools = ["mix"], requirements = ["castore", "rustler"], otp_app = "rustler_precompiled", source = "hex", outer_checksum = "63D1BD5F8E23096D1FF851839923162096364BAC8656A4A3C00D1FFF8E83EE0A" },
   { name = "simplifile", version = "2.2.1", build_tools = ["gleam"], requirements = ["filepath", "gleam_stdlib"], otp_app = "simplifile", source = "hex", outer_checksum = "C88E0EE2D509F6D86EB55161D631657675AA7684DAB83822F7E59EB93D9A60E3" },
-  { name = "snag", version = "1.1.0", build_tools = ["gleam"], requirements = ["gleam_stdlib"], otp_app = "snag", source = "hex", outer_checksum = "7E9F06390040EB5FAB392CE642771484136F2EC103A92AE11BA898C8167E6E17" },
 ]
 
 [requirements]
@@ -32,4 +31,3 @@ gleam_json = { version = ">= 3.0.1 and < 4.0.0" }
 gleam_stdlib = { version = ">= 0.60.0 and < 2.0.0" }
 gleam_yielder = { version = ">= 1.1.0 and < 2.0.0" }
 gleeunit = { version = ">= 1.4.0 and < 2.0.0" }
-snag = { version = ">= 1.1.0 and < 2.0.0" }
