@@ -1,3 +1,6 @@
+@external(erlang, "Elixir.ExSecp256k1", "create_public_key")
+pub fn privkey_to_pubkey(privkey: BitArray) -> Result(BitArray, Nil)
+
 @external(erlang, "Elixir.ExSecp256k1", "recover_compact")
 pub fn recover(
   hash: BitArray,
