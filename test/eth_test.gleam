@@ -3,6 +3,7 @@ import gleam/list
 import gleam/option.{Some}
 import gleam/string
 import gleam/uri
+import gleeunit/should
 
 import eth_crypto/eth
 
@@ -138,6 +139,23 @@ pub fn eth_get_block_miner_test() {
     eth.address_from_string("0x4838B106FCe9647Bdf1E7877BF73cE8B0BAD5f97")
   let assert Ok(value) = eth.eth_get_block_miner(rpc_url, block)
   assert value == miner
+}
+
+pub fn privkey_to_adress_test() {
+  let private_key =
+    "ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+    |> bit_array.base16_decode
+    |> should.be_ok
+
+  let expected_address = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+
+  private_key
+  |> eth.new_privkey
+  |> should.be_ok
+  |> eth.privkey_to_pubkey
+  |> eth.pubkey_to_address
+  |> eth.address_to_checksummed_address
+  |> should.equal(expected_address)
 }
 // pub fn parse_eth_call_response_test() {
 //   let test_response =

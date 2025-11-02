@@ -16,6 +16,10 @@ import gleam/yielder
 
 import eth_crypto/keccak
 
+pub opaque type PrivKey {
+  PrivKey(key: BitArray)
+}
+
 pub opaque type PubKey {
   PubKey(key: BitArray)
 }
@@ -368,6 +372,23 @@ pub fn recover_pubkey(signature: Signature, message_hash: Hash) -> PubKey {
     )
   let assert Ok(pubkey) = new_pubkey(result)
   pubkey
+}
+
+pub fn new_privkey(key: BitArray) -> Result(PrivKey, EthError) {
+  case bit_array.byte_size(key) {
+    key_byte_size if key_byte_size != 32 ->
+      Error(InvalidKeyByteSize(expected: 32, found: key_byte_size))
+    _ -> Ok(PrivKey(key))
+  }
+}
+
+pub fn privkey_to_pubkey(private_key: PrivKey) -> PubKey {
+  PubKey(
+    secp256k1.privkey_to_pubkey(private_key.key)
+    |> result.lazy_unwrap(fn() {
+      panic as "A sanitized private key should always generate a valid public key."
+    }),
+  )
 }
 
 pub fn new_pubkey(key: BitArray) -> Result(PubKey, EthError) {
