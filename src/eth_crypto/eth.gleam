@@ -293,6 +293,9 @@ pub fn eth_call(
       any -> {
         let padding = { 32 - any } * 8
         <<0:size(padding), data:bits>>
+        // Apparently, different data types are padded differently.
+        // Addresses and Integers are left-padded, bytes are right padded
+        // dynamic types like arrays and strings are more complex yet
       }
     }
     |> bit_array.base16_encode
