@@ -7,6 +7,11 @@ import gleeunit/should
 
 import eth_crypto/eth
 
+const rpc_url = "https://ethereum-rpc.publicnode.com"
+
+// May need to change regularly.
+// https://chainlist.org/chain/1
+
 const tests = [
   #(
     "0400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
@@ -124,7 +129,7 @@ pub fn signature_test() {
 pub fn eth_get_balance_test() {
   let assert Ok(address) =
     eth.address_from_string("0x0000000000000000000000000000000000000000")
-  let assert Ok(rpc_url) = uri.parse("https://eth.llamarpc.com")
+  let assert Ok(rpc_url) = uri.parse(rpc_url)
   let assert Ok(value) = eth.eth_get_balance(rpc_url, address)
   let balance = value
 
@@ -133,7 +138,7 @@ pub fn eth_get_balance_test() {
 }
 
 pub fn eth_get_block_miner_test() {
-  let assert Ok(rpc_url) = uri.parse("https://eth.llamarpc.com")
+  let assert Ok(rpc_url) = uri.parse(rpc_url)
   let block = Some(21_879_726)
   let assert Ok(miner) =
     eth.address_from_string("0x4838B106FCe9647Bdf1E7877BF73cE8B0BAD5f97")

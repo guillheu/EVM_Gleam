@@ -479,6 +479,18 @@ pub fn get_contract_address(smart_contract contract: SmartContract) -> Address {
   contract.addr
 }
 
+// https://ethereum.org/developers/docs/apis/json-rpc/#eth_sendrawtransaction
+pub fn eth_send_raw_transaction(
+  from: PrivKey,
+  to: Address,
+  gas: Option(Int),
+  gas_price: Option(Int),
+  value: Option(Int),
+  input: Option(BitArray),
+) -> Result(Hash, Nil) {
+  todo
+}
+
 type GetBlockResult {
   GetBlockResult(miner: String)
 }
