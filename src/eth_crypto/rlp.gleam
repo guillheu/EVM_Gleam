@@ -1,4 +1,5 @@
 import gleam/bit_array
+import gleam/bool
 import gleam/int
 import gleam/list
 import gleam/result
@@ -24,6 +25,8 @@ pub type RlpInput {
 
 pub type RlpDecodeError {
   InvalidPrefix(BitArray)
+  InvalidLength(expected: Int, found: Int)
+  ByteStringTooShort(found_size: Int)
 }
 
 pub fn encode(content: RlpInput) -> Result(BitArray, Nil) {
@@ -83,13 +86,72 @@ pub fn encode(content: RlpInput) -> Result(BitArray, Nil) {
   }
 }
 
-pub fn decode(from: BitArray) -> Result(RlpInput, Nil) {
+pub fn decode(from: BitArray) -> Result(RlpInput, RlpDecodeError) {
   case from {
-    <<n:size(8)>> if n < 128 -> RlpBytes(from)
-    // <<n, rest:bits>> if n 
-    _ -> todo
+    <<n:size(8)>> if n < 128 -> RlpBytes(from) |> Ok
+    <<n:size(8), rest:bits>> -> {
+      case n {
+        n if n < byte_length_prefix -> Error(InvalidPrefix(<<n>>))
+        n if n < byte_length_length_prefix -> {
+          let i = n - byte_length_prefix
+          bit_array.slice(rest, 0, i)
+          |> result.lazy_unwrap(fn() {
+            panic as {
+              "slicing at index "
+              <> int.to_string(i)
+              <> " should work. input: "
+              <> bit_array.base16_encode(from)
+            }
+          })
+          |> RlpBytes
+          |> Ok
+        }
+        //   todo as "short (less than 55 bytes) bytes string"
+        n if n < list_size_prefix -> {
+          let byte_length_length = {
+            n - byte_length_length_prefix
+          }
+          let r = case rest {
+            <<i:size(byte_length_length * 8), content:bits>> ->
+              #(i, content) |> Ok
+            _ ->
+              Error(InvalidLength(byte_length_length, bit_array.byte_size(rest)))
+          }
+          use #(i, content) <- result.try(r)
+          use <- bool.guard(i <= 55, Error(ByteStringTooShort(i)))
+          bit_array.slice(content, 0, i)
+          |> result.lazy_unwrap(fn() {
+            panic as {
+              "slicing at index "
+              <> int.to_string(i)
+              <> " should work. input: "
+              <> bit_array.base16_encode(from)
+            }
+          })
+          |> RlpBytes
+          |> Ok
+        }
+        // todo as "long (over 55 bytes) bytes string"
+        n if n < list_size_length_prefix -> {
+          let i = n - byte_length_prefix
+          list.repeat(Nil, i - 1)
+          |> list.index_fold(#([], rest), fn(acc, _, index) {
+            let #(built_list, remaining_bytes) = acc
+            case remaining_bytes {
+              <<first, rest:bits>> -> todo
+              _ -> todo as "error"
+            }
+          })
+          |> todo
+          |> RlpList
+          |> Ok
+        }
+        //   todo as "short (under 55 items) list"
+        n -> todo as "long (over 55 items) list"
+      }
+    }
+    _ -> todo as "else"
   }
-  todo
 }
 
 fn int_to_bit_array(from: Int) -> BitArray {

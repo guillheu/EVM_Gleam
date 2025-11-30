@@ -9,12 +9,20 @@ type EncodeTestCase {
   KnownTestCase(from: rlp.RlpInput, expected: String)
 }
 
+type DecodeTestCase {
+  DecodeTestCase(
+    from: BitArray,
+    expected: Result(rlp.RlpInput, rlp.RlpDecodeError),
+  )
+}
+
 const encoding_test_cases = [
   EncodeTestCase(rlp.RlpInt(69), Ok(<<69>>)),
   // single-byte integer values >127 are instead considered as a list with a single element.
   // 129 is 0x81, which is 0x80 + 1. 0x80 is the prefix for byte strings, and add to it the length of the string
   EncodeTestCase(rlp.RlpInt(255), Ok(<<129, 255>>)),
   EncodeTestCase(rlp.RlpInt(256), Ok(<<130, 1, 0>>)),
+  EncodeTestCase(rlp.RlpBytes(<<255>>), Ok(<<129, 255>>)),
   EncodeTestCase(rlp.RlpBytes(<<127, 127, 127>>), Ok(<<131, 127, 127, 127>>)),
   EncodeTestCase(rlp.RlpBytes(<<128, 128, 128>>), Ok(<<131, 128, 128, 128>>)),
   EncodeTestCase(rlp.RlpBytes(<<0:size(448)>>), Ok(<<184, 56, 0:size(448)>>)),
@@ -71,6 +79,19 @@ const encoding_test_cases = [
   ),
 ]
 
+const decoding_test_cases = [
+  DecodeTestCase(<<127>>, Ok(rlp.RlpBytes(<<127>>))),
+  DecodeTestCase(<<128>>, Ok(rlp.RlpBytes(<<>>))),
+  DecodeTestCase(<<129, 255>>, Ok(rlp.RlpBytes(<<255>>))),
+  DecodeTestCase(<<131, 255, 256:size(16)>>, Ok(rlp.RlpBytes(<<255, 1, 0>>))),
+  DecodeTestCase(<<184, 55, 0:size(44)>>, Error(rlp.ByteStringTooShort(55))),
+  DecodeTestCase(<<184, 56, 0:size(448)>>, Ok(rlp.RlpBytes(<<0:size(448)>>))),
+  DecodeTestCase(
+    <<185, 256:size(16), 0:size(2048)>>,
+    Ok(rlp.RlpBytes(<<0:size(2048)>>)),
+  ),
+]
+
 pub fn rlp_encode_test() {
   list.each(encoding_test_cases, fn(test_case) {
     case test_case {
@@ -90,5 +111,11 @@ pub fn rlp_encode_test() {
         Nil
       }
     }
+  })
+}
+
+pub fn rlp_decode_test() {
+  list.each(decoding_test_cases, fn(test_case) {
+    assert test_case.expected == rlp.decode(test_case.from)
   })
 }
