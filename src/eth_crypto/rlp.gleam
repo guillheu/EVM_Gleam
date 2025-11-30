@@ -79,6 +79,10 @@ pub fn encode(content: RlpInput) -> Result(BitArray, Nil) {
   }
 }
 
+pub fn decode(from: BitArray) -> RlpInput {
+  todo
+}
+
 fn int_to_bit_array(from: Int) -> BitArray {
   let hex_string = from |> int.to_base16
   case string.length(hex_string) {
@@ -88,8 +92,4 @@ fn int_to_bit_array(from: Int) -> BitArray {
   }
   |> bit_array.base16_decode
   |> result.lazy_unwrap(fn() { panic as "RLP encoding, should be valid hex" })
-}
-
-pub fn decode() {
-  todo
 }

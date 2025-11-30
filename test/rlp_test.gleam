@@ -1,11 +1,15 @@
 import eth_crypto/rlp
+import gleam/bit_array
 import gleam/list
+import gleam/string
+import gleeunit/should
 
 type EncodeTestCase {
   EncodeTestCase(from: rlp.RlpInput, expected: Result(BitArray, Nil))
+  KnownTestCase(from: rlp.RlpInput, expected: String)
 }
 
-const test_cases = [
+const encoding_test_cases = [
   EncodeTestCase(rlp.RlpInt(69), Ok(<<69>>)),
   // single-byte integer values >127 are instead considered as a list with a single element.
   // 129 is 0x81, which is 0x80 + 1. 0x80 is the prefix for byte strings, and add to it the length of the string
@@ -105,10 +109,35 @@ const test_cases = [
     ),
     Ok(<<248, 56, 0:size(448)>>),
   ),
+  // Known test cases were checked against results from npm's `rlp` package
+  KnownTestCase(rlp.RlpList([]), "0xc0"),
+  KnownTestCase(
+    rlp.RlpList([rlp.RlpInt(1), rlp.RlpInt(2), rlp.RlpInt(3)]),
+    "0xc3010203",
+  ),
+  KnownTestCase(rlp.RlpInt(256), "0x820100"),
+  KnownTestCase(rlp.RlpInt(789_456_123), "0x842f0e24fb"),
+  KnownTestCase(rlp.RlpInt(789_456_123), "0x842f0e24fb"),
 ]
 
 pub fn rlp_encode_test() {
-  list.each(test_cases, fn(test_case) {
-    assert test_case.expected == rlp.encode(test_case.from)
+  list.each(encoding_test_cases, fn(test_case) {
+    case test_case {
+      EncodeTestCase(from:, expected:) -> {
+        assert expected == rlp.encode(from)
+        Nil
+      }
+      KnownTestCase(from:, expected:) -> {
+        assert expected |> string.lowercase
+          == "0x"
+          <> {
+            rlp.encode(from)
+            |> should.be_ok
+            |> bit_array.base16_encode
+            |> string.lowercase
+          }
+        Nil
+      }
+    }
   })
 }
