@@ -22,6 +22,10 @@ pub type RlpInput {
   RlpList(List(RlpInput))
 }
 
+pub type RlpDecodeError {
+  InvalidPrefix(BitArray)
+}
+
 pub fn encode(content: RlpInput) -> Result(BitArray, Nil) {
   case content {
     RlpBytes(<<bytes:size(8)>>) if bytes >= 0 && bytes < 128 -> Ok(<<bytes>>)
@@ -79,12 +83,20 @@ pub fn encode(content: RlpInput) -> Result(BitArray, Nil) {
   }
 }
 
-pub fn decode(from: BitArray) -> RlpInput {
+pub fn decode(from: BitArray) -> Result(RlpInput, Nil) {
+  case from {
+    <<n:size(8)>> if n < 128 -> RlpBytes(from)
+    // <<n, rest:bits>> if n 
+    _ -> todo
+  }
   todo
 }
 
 fn int_to_bit_array(from: Int) -> BitArray {
-  let hex_string = from |> int.to_base16
+  let hex_string = case from {
+    0 -> ""
+    _else -> from |> int.to_base16
+  }
   case string.length(hex_string) {
     n if n % 2 == 0 -> hex_string
     n if n % 2 == 1 -> hex_string |> string.pad_start(n + 1, "0")
