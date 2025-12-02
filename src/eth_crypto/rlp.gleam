@@ -47,37 +47,32 @@ pub fn encode(content: RlpInput) -> Result(BitArray, Nil) {
         }
         _ -> Error(Nil)
       }
-    RlpList(item_list) ->
-      case list.length(item_list) {
+    RlpList(item_list) -> {
+      use list_encoded_content <- result.try(
+        list.fold(item_list, Ok(<<>>), fn(acc, next_item) {
+          use acc <- result.try(acc)
+          use encoded_next_item <- result.map(encode(next_item))
+          <<acc:bits, encoded_next_item:bits>>
+        }),
+      )
+
+      case bit_array.byte_size(list_encoded_content) {
         n if n <= 55 ->
-          list.fold(
-            item_list,
-            Ok(<<{ list_size_prefix + n }>>),
-            fn(acc, next_item) {
-              use acc <- result.try(acc)
-              use encoded_next_item <- result.map(encode(next_item))
-              <<acc:bits, encoded_next_item:bits>>
-            },
-          )
+          <<{ list_size_prefix + n }, list_encoded_content:bits>> |> Ok
         n if n <= byte_size_limit -> {
           let size_bytes = int_to_bit_array(n)
           let size_bytes_length = bit_array.byte_size(size_bytes)
-          list.fold(
-            item_list,
-            Ok(<<
-              { list_size_length_prefix + size_bytes_length },
-              size_bytes:bits,
-            >>),
-            fn(acc, next_item) {
-              use acc <- result.try(acc)
-              use encoded_next_item <- result.map(encode(next_item))
-              <<acc:bits, encoded_next_item:bits>>
-            },
-          )
+          <<
+            { list_size_length_prefix + size_bytes_length },
+            size_bytes:bits,
+            list_encoded_content:bits,
+          >>
+          |> Ok
         }
         //   todo as "list of items of size > 55. should be 0xf7 plus the length of the length of the list. then the length of the list. then the concatenated encodings of items in the list."
         _ -> Error(Nil)
       }
+    }
     RlpInt(value) ->
       value
       |> int_to_bit_array

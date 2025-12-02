@@ -1,3 +1,4 @@
+import eth_crypto/rlp
 import eth_crypto/secp256k1
 import gleam/bit_array
 import gleam/bool
@@ -68,6 +69,18 @@ pub type EthError {
   InvalidKeyPrefix(expected: String, found: String)
   InvalidAddressNotHex
   InvalidAddressLength(expected: Int, found: Int)
+}
+
+pub type EthTransaction {
+  LegacyTransaction(
+    nonce: Option(Int),
+    gas_price: Int,
+    gas_limit: Int,
+    to: Address,
+    value: Option(Int),
+    chain_id: Int,
+    data: Option(BitArray),
+  )
 }
 
 fn rpc_response_decoder(
@@ -482,13 +495,59 @@ pub fn get_contract_address(smart_contract contract: SmartContract) -> Address {
 // https://ethereum.org/developers/docs/apis/json-rpc/#eth_sendrawtransaction
 pub fn eth_send_raw_transaction(
   from: PrivKey,
-  to: Address,
-  gas: Option(Int),
-  gas_price: Option(Int),
-  value: Option(Int),
-  input: Option(BitArray),
+  tx: EthTransaction,
 ) -> Result(Hash, Nil) {
+  use rlp_encoded_tx <- result.try(tx |> tx_to_sign |> rlp.encode)
+  echo rlp_encoded_tx |> bit_array.base16_encode
+  let tx_hash = keccak.hash(rlp_encoded_tx)
+  echo tx_hash |> bit_array.base16_encode
+  let assert Ok(#(r, s, v)) = secp256k1.sign(tx_hash, from.key)
+  let v = v + 27
+  echo "SIGNATURE"
+  echo r |> bit_array.base16_encode
+  echo s |> bit_array.base16_encode
+  echo v
+  let assert Ok(eth_send_raw_transaction_params) =
+    signed_tx(tx, v, r, s) |> rlp.encode
+
+  echo eth_send_raw_transaction_params
+    |> bit_array.base16_encode
+    |> string.lowercase
   todo
+}
+
+fn tx_to_sign(tx: EthTransaction) -> rlp.RlpInput {
+  rlp.RlpList([
+    rlp.RlpInt(tx.nonce |> option.unwrap(0)),
+    rlp.RlpInt(tx.gas_price),
+    rlp.RlpInt(tx.gas_limit),
+    rlp.RlpBytes(tx.to.addr),
+    rlp.RlpInt(tx.value |> option.unwrap(0)),
+    rlp.RlpBytes(tx.data |> option.unwrap(<<>>)),
+    rlp.RlpInt(tx.chain_id),
+    rlp.RlpInt(0),
+    rlp.RlpInt(0),
+  ])
+  |> echo
+}
+
+fn signed_tx(
+  tx: EthTransaction,
+  v: Int,
+  r: BitArray,
+  s: BitArray,
+) -> rlp.RlpInput {
+  rlp.RlpList([
+    rlp.RlpInt(tx.nonce |> option.unwrap(0)),
+    rlp.RlpInt(tx.gas_price),
+    rlp.RlpInt(tx.gas_limit),
+    rlp.RlpBytes(tx.to.addr),
+    rlp.RlpInt(tx.value |> option.unwrap(0)),
+    rlp.RlpBytes(tx.data |> option.unwrap(<<>>)),
+    rlp.RlpInt(v),
+    rlp.RlpBytes(r),
+    rlp.RlpBytes(s),
+  ])
 }
 
 type GetBlockResult {

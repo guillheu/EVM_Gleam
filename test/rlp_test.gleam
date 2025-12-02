@@ -40,19 +40,19 @@ const encoding_test_cases = [
     Ok(<<194, 69, 69>>),
   ),
   EncodeTestCase(rlp.RlpList([rlp.RlpBytes(<<127>>)]), Ok(<<193, 127>>)),
-  EncodeTestCase(rlp.RlpList([rlp.RlpBytes(<<255>>)]), Ok(<<193, 129, 255>>)),
+  // EncodeTestCase(rlp.RlpList([rlp.RlpBytes(<<255>>)]), Ok(<<193, 129, 255>>)),
   EncodeTestCase(
     rlp.RlpList([rlp.RlpBytes(<<127>>), rlp.RlpBytes(<<69>>)]),
     Ok(<<194, 127, 69>>),
   ),
-  EncodeTestCase(
-    rlp.RlpList([rlp.RlpBytes(<<255>>), rlp.RlpBytes(<<255>>)]),
-    Ok(<<194, 129, 255, 129, 255>>),
-  ),
-  EncodeTestCase(
-    rlp.RlpList([rlp.RlpBytes(<<255>>), rlp.RlpInt(255)]),
-    Ok(<<194, 129, 255, 129, 255>>),
-  ),
+  // EncodeTestCase(
+  //   rlp.RlpList([rlp.RlpBytes(<<255>>), rlp.RlpBytes(<<255>>)]),
+  //   Ok(<<194, 129, 255, 129, 255>>),
+  // ),
+  // EncodeTestCase(
+  //   rlp.RlpList([rlp.RlpBytes(<<255>>), rlp.RlpInt(255)]),
+  //   Ok(<<194, 129, 255, 129, 255>>),
+  // ),
   // Known test cases were checked against results from npm's `rlp` package
   KnownTestCase(rlp.RlpList([]), "0xc0"),
   KnownTestCase(
@@ -76,6 +76,78 @@ const encoding_test_cases = [
       ],
     ),
     "0xc6808080808080",
+  ),
+  KnownTestCase(rlp.RlpList([rlp.RlpInt(0)]), "0xc180"),
+  KnownTestCase(
+    rlp.RlpList([rlp.RlpInt(0), rlp.RlpInt(0), rlp.RlpInt(0)]),
+    "0xc3808080",
+  ),
+  KnownTestCase(
+    rlp.RlpBytes(
+      <<
+        112,
+        153,
+        121,
+        112,
+        197,
+        24,
+        18,
+        220,
+        58,
+        1,
+        12,
+        125,
+        1,
+        181,
+        14,
+        13,
+        23,
+        220,
+        121,
+        200,
+      >>,
+    ),
+    "0x9470997970c51812dc3a010c7d01b50e0d17dc79c8",
+  ),
+  KnownTestCase(
+    rlp.RlpList(
+      [
+        rlp.RlpBytes(
+          <<
+            112,
+            153,
+            121,
+            112,
+            197,
+            24,
+            18,
+            220,
+            58,
+            1,
+            12,
+            125,
+            1,
+            181,
+            14,
+            13,
+            23,
+            220,
+            121,
+            200,
+          >>,
+        ),
+      ],
+    ),
+    "0xd59470997970c51812dc3a010c7d01b50e0d17dc79c8",
+  ),
+  KnownTestCase(rlp.RlpList([rlp.RlpBytes(<<255>>)]), "0xc281ff"),
+  KnownTestCase(
+    rlp.RlpList([rlp.RlpBytes(<<255>>), rlp.RlpBytes(<<255>>)]),
+    "0xc481ff81ff",
+  ),
+  KnownTestCase(
+    rlp.RlpList([rlp.RlpBytes(<<255>>), rlp.RlpInt(255)]),
+    "0xc481ff81ff",
   ),
 ]
 
