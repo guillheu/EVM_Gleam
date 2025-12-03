@@ -4,6 +4,7 @@ import gleam/int
 import gleam/list
 import gleam/result
 import gleam/string
+import util
 
 const byte_size_limit = 18_446_744_073_709_552_000
 
@@ -36,7 +37,7 @@ pub fn encode(content: RlpInput) -> Result(BitArray, Nil) {
       case bit_array.byte_size(bytes) {
         n if n <= 55 -> <<{ byte_length_prefix + n }, bytes:bits>> |> Ok
         n if n <= byte_size_limit -> {
-          let length_bytes = int_to_bit_array(n)
+          let length_bytes = util.int_to_bit_array(n)
           let length_bytes_length = bit_array.byte_size(length_bytes)
           <<
             { byte_length_length_prefix + length_bytes_length },
@@ -60,7 +61,7 @@ pub fn encode(content: RlpInput) -> Result(BitArray, Nil) {
         n if n <= 55 ->
           <<{ list_size_prefix + n }, list_encoded_content:bits>> |> Ok
         n if n <= byte_size_limit -> {
-          let size_bytes = int_to_bit_array(n)
+          let size_bytes = util.int_to_bit_array(n)
           let size_bytes_length = bit_array.byte_size(size_bytes)
           <<
             { list_size_length_prefix + size_bytes_length },
@@ -75,7 +76,7 @@ pub fn encode(content: RlpInput) -> Result(BitArray, Nil) {
     }
     RlpInt(value) ->
       value
-      |> int_to_bit_array
+      |> util.int_to_bit_array
       |> RlpBytes
       |> encode
   }
@@ -147,18 +148,4 @@ pub fn decode(from: BitArray) -> Result(RlpInput, RlpDecodeError) {
     }
     _ -> todo as "else"
   }
-}
-
-fn int_to_bit_array(from: Int) -> BitArray {
-  let hex_string = case from {
-    0 -> ""
-    _else -> from |> int.to_base16
-  }
-  case string.length(hex_string) {
-    n if n % 2 == 0 -> hex_string
-    n if n % 2 == 1 -> hex_string |> string.pad_start(n + 1, "0")
-    _ -> panic as "length mod 2 should only be 0 or 1"
-  }
-  |> bit_array.base16_decode
-  |> result.lazy_unwrap(fn() { panic as "RLP encoding, should be valid hex" })
 }

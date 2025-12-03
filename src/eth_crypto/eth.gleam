@@ -9,11 +9,13 @@ import gleam/http/request
 import gleam/httpc
 import gleam/int
 import gleam/json
+import gleam/list
 import gleam/option.{type Option, None, Some}
 import gleam/result
 import gleam/string
 import gleam/uri.{type Uri}
 import gleam/yielder
+import util
 
 import eth_crypto/keccak
 
@@ -84,6 +86,13 @@ pub type EthTransaction {
     data: Option(BitArray),
   )
 }
+
+pub type CalldataField {
+  CalldataUint256(Int)
+  CalldataAddress(Address)
+}
+
+pub type CalldataError
 
 fn rpc_response_decoder(
   rpc_result_decoder: decode.Decoder(result_type),
@@ -495,6 +504,16 @@ pub fn pubkey_to_address(pubkey: PubKey) -> Address {
 
 pub fn get_contract_address(smart_contract contract: SmartContract) -> Address {
   contract.addr
+}
+
+pub fn generate_calldata(arguments arguments: List(CalldataField)) -> BitArray {
+  list.map(arguments, fn(argument) {
+    case argument {
+      CalldataAddress(addr) -> <<0:size(96), addr.addr:bits>>
+      CalldataUint256(int) -> util.int_to_bit_array(int)
+    }
+  })
+  |> bit_array.concat
 }
 
 // https://ethereum.org/developers/docs/apis/json-rpc/#eth_sendrawtransaction
