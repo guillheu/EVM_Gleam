@@ -8,7 +8,6 @@ import gleam/http
 import gleam/http/request
 import gleam/httpc
 import gleam/int
-import gleam/io
 import gleam/json
 import gleam/option.{type Option, None, Some}
 import gleam/result
@@ -65,11 +64,13 @@ pub type EthError {
   RpcResponseError(RpcErrorContent)
   RpcResponseFieldMissing(missing_field: String)
   RpcResponseDecodingFailed(details: String)
+  InvalidRpcUri(rpc_uri: uri.Uri)
   InvalidSignatureByteSize(expected: Int, found: Int)
   InvalidKeyByteSize(expected: Int, found: Int)
   InvalidKeyPrefix(expected: String, found: String)
   InvalidAddressNotHex
   InvalidAddressLength(expected: Int, found: Int)
+  TransactionTooLong
 }
 
 pub type EthTransaction {
@@ -315,7 +316,10 @@ pub fn eth_call(
     |> bit_array.base16_encode
   case selector {
     Function(_, hash) -> {
-      let assert Ok(request) = request.from_uri(rpc_uri)
+      use request <- result.try(
+        request.from_uri(rpc_uri)
+        |> result.replace_error(InvalidRpcUri(rpc_uri)),
+      )
       let body = "{
   \"jsonrpc\": \"2.0\",
   \"id\": 1,
@@ -338,7 +342,7 @@ pub fn eth_call(
       case response {
         Ok(res) -> {
           use <- bool.guard(
-            res.status >= 300 && res.status < 200,
+            res.status >= 300 || res.status < 200,
             Error(HttpStatusNon200(res.status)),
           )
           res.body
@@ -497,26 +501,44 @@ pub fn get_contract_address(smart_contract contract: SmartContract) -> Address {
 pub fn eth_send_raw_transaction(
   from: PrivKey,
   tx: EthTransaction,
-) -> Result(Hash, Nil) {
-  use rlp_encoded_tx <- result.try(tx |> tx_to_sign |> rlp.encode)
-  echo rlp_encoded_tx |> bit_array.base16_encode
+  rpc_uri: uri.Uri,
+) -> Result(RpcResponse(String), EthError) {
+  use rlp_encoded_tx <- result.try(
+    tx |> tx_to_sign |> rlp.encode |> result.replace_error(TransactionTooLong),
+  )
   let tx_hash = keccak.hash(rlp_encoded_tx)
-  echo tx_hash |> bit_array.base16_encode
   let assert Ok(#(r, s, v)) = secp256k1.sign(tx_hash, from.key)
-  io.println("TX HASH: " <> tx_hash |> bit_array.base16_encode)
-  io.println("PRIV KEY: " <> from.key |> bit_array.base16_encode)
-  // let v = v + 27
-  echo "SIGNATURE"
-  echo r |> bit_array.base16_encode
-  echo s |> bit_array.base16_encode
-  echo v
   let assert Ok(eth_send_raw_transaction_params) =
     signed_tx(tx, v, r, s) |> rlp.encode
 
-  echo eth_send_raw_transaction_params
+  let raw_tx_params =
+    eth_send_raw_transaction_params
     |> bit_array.base16_encode
     |> string.lowercase
-  todo
+
+  let request_body =
+    "{\"jsonrpc\":\"2.0\",\"method\":\"eth_sendRawTransaction\",\"id\":69,\"params\":[\"0x"
+    <> raw_tx_params
+    <> "\"]}"
+  use req <- result.try(
+    request.from_uri(rpc_uri)
+    |> result.replace_error(InvalidRpcUri(rpc_uri)),
+  )
+  let r =
+    req
+    |> request.prepend_header("Content-Type", "application/json")
+    |> request.prepend_header("Accept", "application/json")
+    |> request.set_method(http.Post)
+    |> request.set_body(request_body)
+    |> httpc.send
+  use res <- result.try(r |> result.map_error(HttpError))
+  use <- bool.guard(
+    res.status >= 300 || res.status < 200,
+    Error(HttpStatusNon200(res.status)),
+  )
+  res.body
+  |> json.parse(rpc_response_decoder(decode.string))
+  |> result.map_error(JsonDecodeError)
 }
 
 fn tx_to_sign(tx: EthTransaction) -> rlp.RlpInput {
@@ -533,7 +555,6 @@ fn tx_to_sign(tx: EthTransaction) -> rlp.RlpInput {
     rlp.RlpInt(0),
     rlp.RlpInt(0),
   ])
-  |> echo
 }
 
 fn signed_tx(
