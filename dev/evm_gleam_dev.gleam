@@ -32,12 +32,26 @@ pub fn main() {
     bit_array.base16_decode(anvil_account_1_private_key_hex)
   let assert Ok(priv) = eth.new_privkey(account_private_key)
 
+  echo priv
+    |> eth.privkey_to_pubkey
+    |> eth.pubkey_to_address
+    |> eth.address_to_checksummed_address
+
   let assert Ok(to) =
     eth.address_from_string("0x70997970c51812dc3a010c7d01b50e0d17dc79c8")
 
   echo to |> eth.address_to_bit_array
 
-  let tx = eth.LegacyTransaction(None, 0, 0, to, Some(0), 1, None)
+  let tx =
+    eth.LegacyTransaction(
+      Some(2),
+      1_000_000_001,
+      21_000,
+      to,
+      Some(1_000_000_000_000_000_000),
+      31_337,
+      None,
+    )
 
   echo uhhhh |> bit_array.base16_encode
 

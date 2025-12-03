@@ -8,6 +8,7 @@ import gleam/http
 import gleam/http/request
 import gleam/httpc
 import gleam/int
+import gleam/io
 import gleam/json
 import gleam/option.{type Option, None, Some}
 import gleam/result
@@ -502,7 +503,9 @@ pub fn eth_send_raw_transaction(
   let tx_hash = keccak.hash(rlp_encoded_tx)
   echo tx_hash |> bit_array.base16_encode
   let assert Ok(#(r, s, v)) = secp256k1.sign(tx_hash, from.key)
-  let v = v + 27
+  io.println("TX HASH: " <> tx_hash |> bit_array.base16_encode)
+  io.println("PRIV KEY: " <> from.key |> bit_array.base16_encode)
+  // let v = v + 27
   echo "SIGNATURE"
   echo r |> bit_array.base16_encode
   echo s |> bit_array.base16_encode
@@ -518,12 +521,14 @@ pub fn eth_send_raw_transaction(
 
 fn tx_to_sign(tx: EthTransaction) -> rlp.RlpInput {
   rlp.RlpList([
+    // rlp.RlpBytes(tx.from.addr),
     rlp.RlpInt(tx.nonce |> option.unwrap(0)),
     rlp.RlpInt(tx.gas_price),
     rlp.RlpInt(tx.gas_limit),
     rlp.RlpBytes(tx.to.addr),
     rlp.RlpInt(tx.value |> option.unwrap(0)),
     rlp.RlpBytes(tx.data |> option.unwrap(<<>>)),
+    // rlp.RlpInt(tx.chain_id * 2 + 35),
     rlp.RlpInt(tx.chain_id),
     rlp.RlpInt(0),
     rlp.RlpInt(0),
@@ -538,13 +543,16 @@ fn signed_tx(
   s: BitArray,
 ) -> rlp.RlpInput {
   rlp.RlpList([
+    // rlp.RlpBytes(tx.from.addr),
     rlp.RlpInt(tx.nonce |> option.unwrap(0)),
     rlp.RlpInt(tx.gas_price),
     rlp.RlpInt(tx.gas_limit),
     rlp.RlpBytes(tx.to.addr),
     rlp.RlpInt(tx.value |> option.unwrap(0)),
     rlp.RlpBytes(tx.data |> option.unwrap(<<>>)),
-    rlp.RlpInt(v),
+
+    // rlp.RlpInt(v),
+    rlp.RlpInt(tx.chain_id * 2 + 35 + v),
     rlp.RlpBytes(r),
     rlp.RlpBytes(s),
   ])
