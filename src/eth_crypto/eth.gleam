@@ -160,9 +160,9 @@ pub fn get_event(
 }
 
 pub fn add_function(
-  contract: SmartContract,
-  id: String,
-  signature: String,
+  smart_contract contract: SmartContract,
+  function_name id: String,
+  signature signature: String,
 ) -> SmartContract {
   let signature_hash =
     "0x"
@@ -506,14 +506,34 @@ pub fn get_contract_address(smart_contract contract: SmartContract) -> Address {
   contract.addr
 }
 
-pub fn generate_calldata(arguments arguments: List(CalldataField)) -> BitArray {
-  list.map(arguments, fn(argument) {
-    case argument {
-      CalldataAddress(addr) -> <<0:size(96), addr.addr:bits>>
-      CalldataUint256(int) -> util.int_to_bit_array(int)
-    }
-  })
-  |> bit_array.concat
+pub fn generate_calldata(
+  function_signature signature: BitArray,
+  arguments arguments: List(CalldataField),
+) -> BitArray {
+  let data =
+    list.map(arguments, fn(argument) {
+      case argument {
+        CalldataAddress(addr) -> addr.addr
+        CalldataUint256(int) -> util.int_to_bit_array(int)
+      }
+      |> pad_start_to_bytes(32)
+    })
+    |> bit_array.concat
+  <<signature:bits, data:bits>>
+}
+
+fn pad_start_to_bytes(data: BitArray, total_byte_length: Int) -> BitArray {
+  let bits_to_add = { total_byte_length * 8 } - bit_array.bit_size(data)
+  case bits_to_add <= 0 {
+    False -> <<0:size(bits_to_add), data:bits>>
+    True -> data
+  }
+}
+
+pub fn get_selector_hash(selector selector: Selector) -> BitArray {
+  let assert Ok(hash) =
+    selector.hash |> echo |> string.drop_start(2) |> bit_array.base16_decode
+  hash
 }
 
 // https://ethereum.org/developers/docs/apis/json-rpc/#eth_sendrawtransaction
